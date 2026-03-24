@@ -1,0 +1,5 @@
+{
+  "import": [
+    "ushironoko/gitfilm/model"
+  ]
+}
