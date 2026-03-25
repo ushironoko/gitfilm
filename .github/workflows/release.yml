@@ -118,8 +118,15 @@ jobs:
 
       - name: Create archive
         run: |
+          BINARY_PATH=$(find target/native -name "main.exe" -path "*/release/*" -type f | head -1)
+          if [ -z "$BINARY_PATH" ]; then
+            echo "::error::Binary not found under target/native/**/release/"
+            find target/native -type f || true
+            exit 1
+          fi
+          echo "Found binary at: $BINARY_PATH"
           mkdir -p "${ARCHIVE_NAME}"
-          cp target/native/release/build/cmd/main/main.exe "${ARCHIVE_NAME}/${BINARY_NAME}"
+          cp "$BINARY_PATH" "${ARCHIVE_NAME}/${BINARY_NAME}"
           chmod +x "${ARCHIVE_NAME}/${BINARY_NAME}"
           cp README.mbt.md "${ARCHIVE_NAME}/README.md"
           tar czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
@@ -193,7 +200,16 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         env:
           BUMP_SHA: ${{ inputs.bump_sha }}
+          VERSION: ${{ inputs.version }}
         run: |
+          COMMIT_MSG=$(git log -1 --format=%s "$BUMP_SHA")
+          EXPECTED_MSG="chore: bump version to ${VERSION}"
+          if [ "$COMMIT_MSG" != "$EXPECTED_MSG" ]; then
+            echo "::warning::Commit message does not match expected bump pattern. Skipping revert."
+            echo "  Actual:   $COMMIT_MSG"
+            echo "  Expected: $EXPECTED_MSG"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git revert --no-edit "$BUMP_SHA"
