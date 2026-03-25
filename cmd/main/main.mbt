@@ -1,5 +1,8 @@
 ///|
 fn run(args : Array[String]) -> Result[String, String] {
+  if @parser.should_show_help(args) {
+    return Ok(@parser.format_help())
+  }
   let parsed = match @parser.parse_args(args) {
     Ok(p) => p
     Err(e) => return Err(e)
@@ -19,15 +22,12 @@ fn run(args : Array[String]) -> Result[String, String] {
     repository: { commits: [], head: -1 },
     next_commit_seq: 1,
   }
-  let final_state = match @emulator.execute_all(
-      initial_state, parsed.operations,
-    ) {
+  let final_state = match
+    @emulator.execute_all(initial_state, parsed.operations) {
     Ok(s) => s
     Err(e) => return Err(e)
   }
-  Ok(
-    @renderer.render_comparison(initial_state, final_state, parsed.operations),
-  )
+  Ok(@renderer.render_comparison(initial_state, final_state, parsed.operations))
 }
 
 ///|

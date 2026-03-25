@@ -1,0 +1,86 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "ushironoko/gitfilm/model"
+
+// Values
+pub fn diff_summary(FileContent, FileContent) -> DiffSummary
+
+pub fn generate_commit_id(Int) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct Commit {
+  id : String
+  files : Map[String, FileContent]
+  parent : String?
+}
+pub impl Show for Commit
+
+pub(all) struct DiffSummary {
+  added : Int
+  removed : Int
+}
+pub impl Eq for DiffSummary
+pub impl Show for DiffSummary
+
+pub(all) struct FileContent {
+  lines : Array[String]
+}
+pub fn FileContent::empty() -> Self
+pub fn FileContent::from_string(String) -> Self
+pub fn FileContent::is_empty(Self) -> Bool
+pub impl Eq for FileContent
+pub impl Show for FileContent
+
+pub(all) enum FileStatus {
+  Untracked
+  Modified(DiffSummary)
+  Staged(DiffSummary)
+  Committed(String)
+  Deleted
+  Clean
+}
+pub impl Show for FileStatus
+
+pub(all) struct GitState {
+  working_tree : WorkingTree
+  staging_area : StagingArea
+  repository : Repository
+  next_commit_seq : Int
+}
+pub impl Show for GitState
+
+pub(all) enum Operation {
+  Add(String)
+  Commit
+  ResetSoft(Int)
+  ResetMixed(Int)
+  ResetHard(Int)
+  Restore(String)
+  Checkout(String)
+  Rm(String)
+}
+pub impl Show for Operation
+
+pub(all) struct Repository {
+  commits : Array[Commit]
+  head : Int
+}
+pub fn Repository::get_file_at_head(Self, String) -> FileContent
+pub fn Repository::head_commit(Self) -> Commit?
+pub impl Show for Repository
+
+pub(all) struct StagingArea {
+  files : Map[String, FileContent]
+}
+pub impl Show for StagingArea
+
+pub(all) struct WorkingTree {
+  files : Map[String, FileContent]
+}
+pub impl Show for WorkingTree
+
+// Type aliases
+
+// Traits
+

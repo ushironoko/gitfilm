@@ -1,8 +1,0 @@
-{
-  "import": [
-    "ushironoko/gitfilm/model"
-  ],
-  "test-import": [
-    "ushironoko/gitfilm/emulator"
-  ]
-}
