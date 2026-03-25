@@ -1,0 +1,215 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., 0.1.0)"
+        required: true
+        type: string
+      bump_sha:
+        description: "SHA of the version bump commit"
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: gitfilm
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ inputs.bump_sha }}
+
+      - name: Validate semver format
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid semver format: $VERSION"
+            exit 1
+          fi
+
+      - name: Validate bump_sha is HEAD of origin/main
+        env:
+          BUMP_SHA: ${{ inputs.bump_sha }}
+        run: |
+          MAIN_HEAD=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          if [ "$MAIN_HEAD" != "$BUMP_SHA" ]; then
+            echo "::error::bump_sha ($BUMP_SHA) is not the current HEAD of origin/main ($MAIN_HEAD)"
+            exit 1
+          fi
+
+      - name: Verify version matches moon.mod.json
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          MOD_VERSION=$(grep '"version"' moon.mod.json | sed 's/.*"\([0-9]*\.[0-9]*\.[0-9]*\)".*/\1/')
+          if [ "$MOD_VERSION" != "$VERSION" ]; then
+            echo "::error::Input version ($VERSION) does not match moon.mod.json version ($MOD_VERSION)"
+            exit 1
+          fi
+
+      - name: Check tag does not already exist
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${VERSION}" | grep -q .; then
+            echo "::error::Tag v${VERSION} already exists"
+            exit 1
+          fi
+
+  test:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ inputs.bump_sha }}
+
+      - name: Install MoonBit toolchain
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: moon update
+
+      - name: Run tests
+        run: moon test
+
+  build:
+    needs: [validate, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-linux
+            runner: ubuntu-latest
+          - target: aarch64-macos
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    env:
+      ARCHIVE_NAME: gitfilm-${{ inputs.version }}-${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ inputs.bump_sha }}
+
+      - name: Install MoonBit toolchain
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: moon update
+
+      - name: Build native release binary
+        run: moon build --target native --release
+
+      - name: Create archive
+        run: |
+          mkdir -p "${ARCHIVE_NAME}"
+          cp target/native/release/build/cmd/main/main.exe "${ARCHIVE_NAME}/${BINARY_NAME}"
+          chmod +x "${ARCHIVE_NAME}/${BINARY_NAME}"
+          cp README.mbt.md "${ARCHIVE_NAME}/README.md"
+          tar czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          shasum -a 256 "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: ${{ env.ARCHIVE_NAME }}
+          path: |
+            ${{ env.ARCHIVE_NAME }}.tar.gz
+            ${{ env.ARCHIVE_NAME }}.tar.gz.sha256
+          retention-days: 1
+
+  release:
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ inputs.bump_sha }}
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ inputs.version }}
+          BUMP_SHA: ${{ inputs.bump_sha }}
+        run: |
+          git tag "v${VERSION}" "$BUMP_SHA"
+          git push origin "v${VERSION}"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            artifacts/*
+
+  rollback:
+    needs: [validate, test, build, release]
+    if: always() && (needs.test.result == 'failure' || needs.build.result == 'failure' || needs.release.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Check if HEAD is still the bump commit
+        id: check
+        env:
+          BUMP_SHA: ${{ inputs.bump_sha }}
+        run: |
+          HEAD_SHA=$(git rev-parse HEAD)
+          if [ "$HEAD_SHA" != "$BUMP_SHA" ]; then
+            echo "::warning::HEAD ($HEAD_SHA) has moved past bump commit ($BUMP_SHA). Skipping revert."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Revert bump commit
+        if: steps.check.outputs.skip != 'true'
+        env:
+          BUMP_SHA: ${{ inputs.bump_sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git revert --no-edit "$BUMP_SHA"
+          git push origin main
+
+      - name: Delete tag
+        if: always()
+        continue-on-error: true
+        env:
+          VERSION: ${{ inputs.version }}
+        run: git push origin --delete "v${VERSION}"
+
+      - name: Delete GitHub Release
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: gh release delete "v${VERSION}" --yes
