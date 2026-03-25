@@ -116,9 +116,6 @@ jobs:
       - name: Build native release binary
         run: moon build --target native --release
 
-      - name: List build output
-        run: find target -type f 2>/dev/null || echo "No target directory found"
-
       - name: Create archive
         run: |
           BINARY_PATH=$(find . -name "main.exe" -path "*/release/*" -type f | head -1)
