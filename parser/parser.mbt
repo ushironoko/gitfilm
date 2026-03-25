@@ -27,7 +27,8 @@ fn parse_head_ref(s : String) -> Result[Int, String] {
 
 ///|
 pub fn parse_operation(s : String) -> Result[@model.Operation, String] {
-  let tokens = s.split(" ")
+  let tokens = s
+    .split(" ")
     .map(fn(sv) { sv.to_string() })
     .filter(fn(t) { t != "" })
     .collect()
@@ -47,6 +48,20 @@ pub fn parse_operation(s : String) -> Result[@model.Operation, String] {
     ["rm", file, ..] => Ok(@model.Operation::Rm(file))
     _ => Err("Unknown operation: \{s}")
   }
+}
+
+///|
+pub fn should_show_help(args : Array[String]) -> Bool {
+  let skip_args = args[1:]
+  if skip_args.is_empty() {
+    return true
+  }
+  for a in skip_args {
+    if a == "--help" || a == "-h" {
+      return true
+    }
+  }
+  false
 }
 
 ///|

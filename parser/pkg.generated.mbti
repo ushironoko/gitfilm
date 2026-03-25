@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "ushironoko/gitfilm/parser"
+
+import {
+  "ushironoko/gitfilm/model",
+}
+
+// Values
+pub fn cli_options() -> Array[CliOption]
+
+pub fn format_help() -> String
+
+pub fn operation_defs() -> Array[OperationDef]
+
+pub fn parse_args(Array[String]) -> Result[ParsedInput, String]
+
+pub fn parse_operation(String) -> Result[@model.Operation, String]
+
+pub fn should_show_help(Array[String]) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) struct CliOption {
+  names : Array[String]
+  value_hint : String?
+  description : String
+  required : Bool
+}
+pub impl Show for CliOption
+
+pub(all) struct OperationDef {
+  syntax : String
+  description : String
+}
+pub impl Show for OperationDef
+
+pub(all) struct ParsedInput {
+  file_paths : Array[String]
+  operations : Array[@model.Operation]
+}
+pub impl Show for ParsedInput
+
+// Type aliases
+
+// Traits
+

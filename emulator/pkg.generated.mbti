@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "ushironoko/gitfilm/emulator"
+
+import {
+  "ushironoko/gitfilm/model",
+}
+
+// Values
+pub fn apply(@model.GitState, @model.Operation) -> Result[@model.GitState, String]
+
+pub fn execute_all(@model.GitState, Array[@model.Operation]) -> Result[@model.GitState, String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

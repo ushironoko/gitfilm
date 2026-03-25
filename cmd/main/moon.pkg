@@ -1,0 +1,12 @@
+import {
+  "ushironoko/gitfilm/model",
+  "ushironoko/gitfilm/parser",
+  "ushironoko/gitfilm/emulator",
+  "ushironoko/gitfilm/renderer",
+  "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
+}
+
+options(
+  "is-main": true,
+)

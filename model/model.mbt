@@ -111,7 +111,10 @@ pub fn Repository::head_commit(self : Repository) -> Commit? {
 }
 
 ///|
-pub fn Repository::get_file_at_head(self : Repository, path : String) -> FileContent {
+pub fn Repository::get_file_at_head(
+  self : Repository,
+  path : String,
+) -> FileContent {
   match self.head_commit() {
     Some(commit) => commit.files.get(path).unwrap_or(FileContent::empty())
     None => FileContent::empty()

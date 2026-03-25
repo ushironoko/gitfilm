@@ -21,7 +21,7 @@ fn format_diff(d : @model.DiffSummary) -> String {
 ///|
 fn compute_wt_status(
   path : String,
-  state : @model.GitState
+  state : @model.GitState,
 ) -> @model.FileStatus? {
   let wt_content = state.working_tree.files.get(path)
   match wt_content {
@@ -51,7 +51,9 @@ fn compute_wt_status(
           if wt == repo_content {
             Some(@model.FileStatus::Clean)
           } else {
-            Some(@model.FileStatus::Modified(@model.diff_summary(repo_content, wt)))
+            Some(
+              @model.FileStatus::Modified(@model.diff_summary(repo_content, wt)),
+            )
           }
         } else {
           Some(@model.FileStatus::Untracked)
@@ -68,11 +70,11 @@ fn compute_wt_status(
 ///|
 fn compute_sa_status(
   path : String,
-  state : @model.GitState
+  state : @model.GitState,
 ) -> @model.FileStatus? {
   match state.staging_area.files.get(path) {
     None => None
-    Some(sa_content) => {
+    Some(sa_content) =>
       if sa_content.is_empty() {
         Some(@model.FileStatus::Deleted)
       } else {
@@ -80,17 +82,20 @@ fn compute_sa_status(
         if sa_content == repo_content {
           Some(@model.FileStatus::Clean)
         } else {
-          Some(@model.FileStatus::Staged(@model.diff_summary(repo_content, sa_content)))
+          Some(
+            @model.FileStatus::Staged(
+              @model.diff_summary(repo_content, sa_content),
+            ),
+          )
         }
       }
-    }
   }
 }
 
 ///|
 fn compute_repo_status(
   path : String,
-  state : @model.GitState
+  state : @model.GitState,
 ) -> @model.FileStatus? {
   match state.repository.head_commit() {
     Some(commit) =>
@@ -181,7 +186,7 @@ pub fn render_state(state : @model.GitState, label : String) -> String {
 pub fn render_comparison(
   prev : @model.GitState,
   next : @model.GitState,
-  ops : Array[@model.Operation]
+  ops : Array[@model.Operation],
 ) -> String {
   let ops_desc = ops.map(fn(op) { op.to_string() }).join(", ")
   let prev_output = render_state(prev, "prev")
