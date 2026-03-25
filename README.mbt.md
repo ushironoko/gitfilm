@@ -6,29 +6,21 @@ It simulates git operations without touching any real repository, displaying fil
 
 ## Installation
 
-### via mise
+### Prerequisites
+
+[MoonBit](https://www.moonbitlang.com/download) toolchain is required.
 
 ```bash
-mise use -g github:ushironoko/gitfilm
+# macOS / Linux
+curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
 ```
 
-### via GitHub Releases
-
-Download the binary for your platform from [Releases](https://github.com/ushironoko/gitfilm/releases).
-
-Available platforms:
-- `gitfilm-*-aarch64-macos.tar.gz` (macOS Apple Silicon)
-- `gitfilm-*-x86_64-linux.tar.gz` (Linux x86_64)
-
-### Build from source
-
-Requires [MoonBit](https://www.moonbitlang.com/download) toolchain.
+### Build
 
 ```bash
 git clone https://github.com/ushironoko/gitfilm.git
 cd gitfilm
-moon build --target native --release
-# Binary: target/native/release/build/cmd/main/main.exe
+moon build --target native
 ```
 
 ## Usage
