@@ -52,7 +52,7 @@ fn resolve_git_args(
             "--execute does not support resetting past the root commit",
           )
         }
-        Ok([["update-ref", "-d", "HEAD"], ["reset"]])
+        Ok([["update-ref", "-d", "HEAD"], ["rm", "--cached", "-rf", "."]])
       } else {
         Ok([to_git_args(op).args])
       }
@@ -65,7 +65,7 @@ fn resolve_git_args(
             "--execute does not support resetting past the root commit",
           )
         }
-        Ok([["update-ref", "-d", "HEAD"], ["checkout", "--", "."]])
+        Ok([["rm", "-rf", "."], ["update-ref", "-d", "HEAD"]])
       } else {
         Ok([to_git_args(op).args])
       }

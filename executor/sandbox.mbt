@@ -85,6 +85,35 @@ pub fn create_worktree() -> Result[String, String] {
 }
 
 ///|
+fn get_source_git_dir() -> Result[String, String] {
+  match @process.exec("git", ["rev-parse", "--absolute-git-dir"], ".") {
+    Ok((output, code)) =>
+      if code == 0 {
+        Ok(trim_end(output))
+      } else {
+        Err("Failed to resolve source .git directory")
+      }
+    Err(e) => Err(e)
+  }
+}
+
+///|
+fn copy_repo_local_settings(
+  src_git_dir : String,
+  dst_git_dir : String,
+) -> Unit {
+  // Reproduce source repo's local config (user.name, user.email, etc.)
+  let _ = @process.exec(
+    "cp", ["-f", src_git_dir + "/config", dst_git_dir + "/config"], ".",
+  )
+  // Reproduce source repo's hooks for faithful dry-run behavior
+  let _ = @process.exec("rm", ["-rf", dst_git_dir + "/hooks"], ".")
+  let _ = @process.exec(
+    "cp", ["-a", src_git_dir + "/hooks", dst_git_dir + "/hooks"], ".",
+  )
+}
+
+///|
 fn create_fresh_sandbox(wt_path : String) -> Result[Unit, String] {
   match @process.exec("mkdir", ["-p", wt_path], ".") {
     Ok(_) => ()
@@ -97,6 +126,11 @@ fn create_fresh_sandbox(wt_path : String) -> Result[Unit, String] {
       }
     Err(e) => return Err(e)
   }
+  let src_git_dir = match get_source_git_dir() {
+    Ok(d) => d
+    Err(e) => return Err(e)
+  }
+  copy_repo_local_settings(src_git_dir, wt_path + "/.git")
   // Copy indexed files from original repo to sandbox
   let wt_prefix = wt_path + "/"
   let _ = @process.exec(
