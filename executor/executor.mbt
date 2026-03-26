@@ -7,6 +7,8 @@ pub(all) struct SimResult {
   log_output : String
   touched_paths : Array[String]
   exec_log : String
+  prev_tracked_paths : Array[String]
+  tracked_paths : Array[String]
 } derive(Show)
 
 ///|
@@ -194,6 +196,9 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
   let prev_log_output = git_in(wt_path, ["log", "--oneline", "-20"]).unwrap_or(
     "",
   )
+  let prev_tracked_paths = extract_lines(
+    git_in(wt_path, ["ls-files"]).unwrap_or(""),
+  )
   let log = StringBuilder::new()
   let all_touched : Array[String] = []
   for op in ops {
@@ -235,6 +240,9 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
   )
   let diff_stat = git_in(wt_path, ["diff", "--stat"]).unwrap_or("")
   let log_output = git_in(wt_path, ["log", "--oneline", "-20"]).unwrap_or("")
+  let tracked_paths = extract_lines(
+    git_in(wt_path, ["ls-files"]).unwrap_or(""),
+  )
   match remove_worktree(wt_path) {
     Ok(_) => ()
     Err(e) => return Err(e)
@@ -248,6 +256,8 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
     log_output,
     touched_paths,
     exec_log: log.to_string(),
+    prev_tracked_paths,
+    tracked_paths,
   })
 }
 

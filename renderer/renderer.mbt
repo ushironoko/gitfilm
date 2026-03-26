@@ -250,7 +250,7 @@ fn render_area_files(
   paths : Array[String],
   entries : Array[PorcelainEntry],
   format_fn : (PorcelainEntry) -> String?,
-  default_status : String,
+  default_fn : (String) -> String,
   empty_label : String,
 ) -> Unit {
   buf.write_string("\{label}")
@@ -264,7 +264,7 @@ fn render_area_files(
         break
       }
     }
-    let status = found_status.unwrap_or(default_status)
+    let status = found_status.unwrap_or(default_fn(path))
     if status == "" {
       continue
     }
@@ -312,6 +312,14 @@ pub fn render_from_sim_result(
   let touched = result.touched_paths
   let prev_entries = parse_porcelain_status(result.prev_porcelain_status)
   let next_entries = parse_porcelain_status(result.porcelain_status)
+  let prev_tracked : Map[String, Unit] = {}
+  for p in result.prev_tracked_paths {
+    prev_tracked[p] = ()
+  }
+  let next_tracked : Map[String, Unit] = {}
+  for p in result.tracked_paths {
+    next_tracked[p] = ()
+  }
   buf.write_string("=== prev ===\n")
   render_area_files(
     buf,
@@ -319,7 +327,7 @@ pub fn render_from_sim_result(
     touched,
     prev_entries,
     fn(e) { Some(format_porcelain_wt_status(e)) },
-    "clean",
+    fn(path) { if prev_tracked.contains(path) { "clean" } else { "" } },
     "(empty)",
   )
   render_area_files(
@@ -328,7 +336,7 @@ pub fn render_from_sim_result(
     touched,
     prev_entries,
     fn(e) { format_porcelain_sa_status(e) },
-    "",
+    fn(_) { "" },
     "(empty)",
   )
   render_log(buf, "[Repository]    ", result.prev_log_output)
@@ -340,7 +348,7 @@ pub fn render_from_sim_result(
     touched,
     next_entries,
     fn(e) { Some(format_porcelain_wt_status(e)) },
-    "clean",
+    fn(path) { if next_tracked.contains(path) { "clean" } else { "" } },
     "(empty)",
   )
   render_area_files(
@@ -349,7 +357,7 @@ pub fn render_from_sim_result(
     touched,
     next_entries,
     fn(e) { format_porcelain_sa_status(e) },
-    "",
+    fn(_) { "" },
     "(empty)",
   )
   render_log(buf, "[Repository]    ", result.log_output)

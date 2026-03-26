@@ -29,6 +29,8 @@ pub(all) struct SimResult {
   log_output : String
   touched_paths : Array[String]
   exec_log : String
+  prev_tracked_paths : Array[String]
+  tracked_paths : Array[String]
 }
 pub impl Show for SimResult
 

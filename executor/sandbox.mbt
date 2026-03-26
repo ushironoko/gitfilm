@@ -46,27 +46,96 @@ pub fn create_worktree() -> Result[String, String] {
     Ok(_) => ()
     Err(e) => return Err(e)
   }
-  match check_head_exists() {
-    Ok(_) => ()
-    Err(e) => return Err(e)
-  }
   let wt_path = match generate_worktree_path() {
     Ok(p) => p
     Err(e) => return Err(e)
   }
-  match
-    @process.exec("git", ["worktree", "add", wt_path, "--detach", "HEAD"], ".") {
-    Ok((_, code)) => if code != 0 { return Err("Failed to create worktree") }
-    Err(e) => return Err(e)
+  let has_head = match check_head_exists() {
+    Ok(_) => true
+    Err(_) => false
   }
-  match sync_dirty_files(wt_path) {
-    Ok(_) => ()
-    Err(e) => {
-      let _ = remove_worktree(wt_path)
-      return Err(e)
+  if has_head {
+    match
+      @process.exec(
+        "git", ["worktree", "add", wt_path, "--detach", "HEAD"], ".",
+      ) {
+      Ok((_, code)) =>
+        if code != 0 {
+          return Err("Failed to create worktree")
+        }
+      Err(e) => return Err(e)
+    }
+    match sync_dirty_files(wt_path) {
+      Ok(_) => ()
+      Err(e) => {
+        let _ = remove_worktree(wt_path)
+        return Err(e)
+      }
+    }
+  } else {
+    match create_fresh_sandbox(wt_path) {
+      Ok(_) => ()
+      Err(e) => {
+        let _ = @process.exec("rm", ["-rf", wt_path], ".")
+        return Err(e)
+      }
     }
   }
   Ok(wt_path)
+}
+
+///|
+fn create_fresh_sandbox(wt_path : String) -> Result[Unit, String] {
+  match @process.exec("mkdir", ["-p", wt_path], ".") {
+    Ok(_) => ()
+    Err(e) => return Err(e)
+  }
+  match @process.exec("git", ["init", wt_path], ".") {
+    Ok((_, code)) =>
+      if code != 0 {
+        return Err("Failed to initialize sandbox repository")
+      }
+    Err(e) => return Err(e)
+  }
+  // Copy indexed files from original repo to sandbox
+  let wt_prefix = wt_path + "/"
+  let _ = @process.exec(
+    "git",
+    ["checkout-index", "--all", "--force", "--prefix", wt_prefix],
+    ".",
+  )
+  // Stage copied files in the sandbox
+  let _ = git_in(wt_path, ["add", "-A"])
+  // Overwrite with working tree modifications
+  let wt_modified = match
+    @process.exec("git", ["diff", "--diff-filter=d", "--name-only"], ".") {
+    Ok((output, _)) => lines_from_output(output)
+    Err(_) => []
+  }
+  for file in wt_modified {
+    copy_file_to_wt(file, wt_path)
+  }
+  // Handle working tree deletions
+  let wt_deleted = match
+    @process.exec("git", ["diff", "--diff-filter=D", "--name-only"], ".") {
+    Ok((output, _)) => lines_from_output(output)
+    Err(_) => []
+  }
+  for file in wt_deleted {
+    remove_file_from_wt(file, wt_path)
+  }
+  // Copy untracked files
+  let untracked = match
+    @process.exec(
+      "git", ["ls-files", "--others", "--exclude-standard"], ".",
+    ) {
+    Ok((output, _)) => lines_from_output(output)
+    Err(_) => []
+  }
+  for file in untracked {
+    copy_file_to_wt(file, wt_path)
+  }
+  Ok(())
 }
 
 ///|
