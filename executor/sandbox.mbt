@@ -70,41 +70,61 @@ pub fn create_worktree() -> Result[String, String] {
 }
 
 ///|
+fn lines_from_output(output : String) -> Array[String] {
+  output
+  .split("\n")
+  .map(fn(sv) { sv.to_string() })
+  .filter(fn(s) { s != "" })
+  .collect()
+}
+
+///|
+fn copy_file_to_wt(file : String, wt_path : String) -> Unit {
+  let dest = wt_path + "/" + file
+  let parent = extract_parent_dir(dest)
+  if parent != "" {
+    let _ = @process.exec("mkdir", ["-p", parent], ".")
+  }
+  let _ = @process.exec("cp", [file, dest], ".")
+}
+
+///|
 fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
-  let modified = match
-    @process.exec("git", ["diff", "--name-only", "HEAD"], ".") {
-    Ok((output, _)) =>
-      output
-      .split("\n")
-      .map(fn(sv) { sv.to_string() })
-      .filter(fn(s) { s != "" })
-      .collect()
+  let wt_prefix = wt_path + "/"
+  // Overwrite worktree files with current index content (reproduces staged state)
+  let _ = @process.exec(
+    "git",
+    ["checkout-index", "--all", "--force", "--prefix", wt_prefix],
+    ".",
+  )
+  // Stage files that are in the index but differ from HEAD
+  let staged = match
+    @process.exec("git", ["diff", "--cached", "--name-only"], ".") {
+    Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }
+  for file in staged {
+    let _ = git_in(wt_path, ["add", file])
+  }
+  // Overwrite with working tree content for unstaged modifications
+  let unstaged = match
+    @process.exec("git", ["diff", "--name-only"], ".") {
+    Ok((output, _)) => lines_from_output(output)
+    Err(_) => []
+  }
+  for file in unstaged {
+    copy_file_to_wt(file, wt_path)
+  }
+  // Copy untracked files
   let untracked = match
-    @process.exec("git", ["ls-files", "--others", "--exclude-standard"], ".") {
-    Ok((output, _)) =>
-      output
-      .split("\n")
-      .map(fn(sv) { sv.to_string() })
-      .filter(fn(s) { s != "" })
-      .collect()
+    @process.exec(
+      "git", ["ls-files", "--others", "--exclude-standard"], ".",
+    ) {
+    Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }
-  let all_dirty : Array[String] = []
-  for f in modified {
-    all_dirty.push(f)
-  }
-  for f in untracked {
-    all_dirty.push(f)
-  }
-  for file in all_dirty {
-    let dest = wt_path + "/" + file
-    let parent = extract_parent_dir(dest)
-    if parent != "" {
-      let _ = @process.exec("mkdir", ["-p", parent], ".")
-    }
-    let _ = @process.exec("cp", [file, dest], ".")
+  for file in untracked {
+    copy_file_to_wt(file, wt_path)
   }
   Ok(())
 }
