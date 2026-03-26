@@ -93,8 +93,8 @@ pub fn exec(
   let output_bytes = gitfilm_exec_ffi(
     string_to_utf8(program, true),
     string_to_utf8(cwd, true),
-    string_to_utf8(joined, false),
-    string_to_utf8(arg_separator, false),
+    string_to_utf8(joined, true),
+    string_to_utf8(arg_separator, true),
   )
   let output = utf8_to_string(output_bytes)
   let exit_code = gitfilm_last_exit_code_ffi()

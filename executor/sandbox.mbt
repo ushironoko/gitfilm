@@ -89,6 +89,12 @@ fn copy_file_to_wt(file : String, wt_path : String) -> Unit {
 }
 
 ///|
+fn remove_file_from_wt(file : String, wt_path : String) -> Unit {
+  let dest = wt_path + "/" + file
+  let _ = @process.exec("rm", ["-f", dest], ".")
+}
+
+///|
 fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
   let wt_prefix = wt_path + "/"
   // Overwrite worktree files with current index content (reproduces staged state)
@@ -97,22 +103,49 @@ fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
     ["checkout-index", "--all", "--force", "--prefix", wt_prefix],
     ".",
   )
-  // Stage files that are in the index but differ from HEAD
-  let staged = match
-    @process.exec("git", ["diff", "--cached", "--name-only"], ".") {
+  // Handle staged deletions: files removed from index but still present in worktree from HEAD
+  let staged_deletions = match
+    @process.exec(
+      "git", ["diff", "--cached", "--diff-filter=D", "--name-only"], ".",
+    ) {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }
-  for file in staged {
+  for file in staged_deletions {
+    remove_file_from_wt(file, wt_path)
+    let _ = git_in(wt_path, ["rm", "--force", file])
+  }
+  // Stage files that are in the index but differ from HEAD (excluding deletions already handled)
+  let staged_modified = match
+    @process.exec(
+      "git", ["diff", "--cached", "--diff-filter=d", "--name-only"], ".",
+    ) {
+    Ok((output, _)) => lines_from_output(output)
+    Err(_) => []
+  }
+  for file in staged_modified {
     let _ = git_in(wt_path, ["add", file])
   }
-  // Overwrite with working tree content for unstaged modifications
-  let unstaged = match
-    @process.exec("git", ["diff", "--name-only"], ".") {
+  // Handle unstaged deletions: files in index but deleted from working tree
+  let unstaged_deletions = match
+    @process.exec(
+      "git", ["diff", "--diff-filter=D", "--name-only"], ".",
+    ) {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }
-  for file in unstaged {
+  for file in unstaged_deletions {
+    remove_file_from_wt(file, wt_path)
+  }
+  // Overwrite with working tree content for unstaged modifications (excluding deletions)
+  let unstaged_modified = match
+    @process.exec(
+      "git", ["diff", "--diff-filter=d", "--name-only"], ".",
+    ) {
+    Ok((output, _)) => lines_from_output(output)
+    Err(_) => []
+  }
+  for file in unstaged_modified {
     copy_file_to_wt(file, wt_path)
   }
   // Copy untracked files

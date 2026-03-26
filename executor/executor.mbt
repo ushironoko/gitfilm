@@ -26,33 +26,49 @@ fn get_commit_count(repo_path : String) -> Int {
 fn resolve_git_args(
   op : @model.Operation,
   repo_path : String,
-) -> Array[Array[String]] {
+  sandbox~ : Bool = true,
+) -> Result[Array[Array[String]], String] {
   match op {
     ResetSoft(n) => {
       let count = get_commit_count(repo_path)
       if n >= count && count > 0 {
-        [["update-ref", "-d", "HEAD"]]
+        if not(sandbox) {
+          return Err(
+            "--execute does not support resetting past the root commit",
+          )
+        }
+        Ok([["update-ref", "-d", "HEAD"]])
       } else {
-        [to_git_args(op).args]
+        Ok([to_git_args(op).args])
       }
     }
     ResetMixed(n) => {
       let count = get_commit_count(repo_path)
       if n >= count && count > 0 {
-        [["update-ref", "-d", "HEAD"], ["reset"]]
+        if not(sandbox) {
+          return Err(
+            "--execute does not support resetting past the root commit",
+          )
+        }
+        Ok([["update-ref", "-d", "HEAD"], ["reset"]])
       } else {
-        [to_git_args(op).args]
+        Ok([to_git_args(op).args])
       }
     }
     ResetHard(n) => {
       let count = get_commit_count(repo_path)
       if n >= count && count > 0 {
-        [["update-ref", "-d", "HEAD"], ["checkout", "--", "."]]
+        if not(sandbox) {
+          return Err(
+            "--execute does not support resetting past the root commit",
+          )
+        }
+        Ok([["update-ref", "-d", "HEAD"], ["checkout", "--", "."]])
       } else {
-        [to_git_args(op).args]
+        Ok([to_git_args(op).args])
       }
     }
-    _ => [to_git_args(op).args]
+    _ => Ok([to_git_args(op).args])
   }
 }
 
@@ -61,8 +77,12 @@ fn run_op(
   repo_path : String,
   op : @model.Operation,
   log : StringBuilder,
+  sandbox~ : Bool = true,
 ) -> Result[Unit, String] {
-  let cmd_groups = resolve_git_args(op, repo_path)
+  let cmd_groups = match resolve_git_args(op, repo_path, sandbox~) {
+    Ok(groups) => groups
+    Err(e) => return Err(e)
+  }
   for args in cmd_groups {
     let args_str = args.join(" ")
     match git_in(repo_path, args) {
@@ -186,7 +206,7 @@ pub fn execute(ops : Array[@model.Operation]) -> Result[String, String] {
   }
   let log = StringBuilder::new()
   for i, op in ops {
-    match run_op(".", op, log) {
+    match run_op(".", op, log, sandbox=false) {
       Ok(_) => ()
       Err(e) => {
         log.write_string("Error at step \{i + 1}: \{e}\n")
