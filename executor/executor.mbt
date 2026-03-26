@@ -262,8 +262,54 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
 }
 
 ///|
+// Reject operation sequences that would hit a past-root reset on the real repo
+// before any mutation occurs.  Projects commit-count evolution so the check is
+// accurate even when earlier ops (commit / reset) change the count.
+fn preflight_execute_ops(
+  repo_path : String,
+  ops : Array[@model.Operation],
+) -> Result[Unit, String] {
+  let mut count = get_commit_count(repo_path)
+  for i, op in ops {
+    match op {
+      ResetSoft(n) => {
+        if n >= count && count > 0 {
+          return Err(
+            "step \{i + 1}: --execute does not support resetting past the root commit",
+          )
+        }
+        count = count - n
+      }
+      ResetMixed(n) => {
+        if n >= count && count > 0 {
+          return Err(
+            "step \{i + 1}: --execute does not support resetting past the root commit",
+          )
+        }
+        count = count - n
+      }
+      ResetHard(n) => {
+        if n >= count && count > 0 {
+          return Err(
+            "step \{i + 1}: --execute does not support resetting past the root commit",
+          )
+        }
+        count = count - n
+      }
+      Commit(_) => count = count + 1
+      _ => ()
+    }
+  }
+  Ok(())
+}
+
+///|
 pub fn execute(ops : Array[@model.Operation]) -> Result[String, String] {
   match validate_git_repo(".") {
+    Ok(_) => ()
+    Err(e) => return Err(e)
+  }
+  match preflight_execute_ops(".", ops) {
     Ok(_) => ()
     Err(e) => return Err(e)
   }
