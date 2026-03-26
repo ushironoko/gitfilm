@@ -16,10 +16,10 @@ pub(all) struct OperationDef {
 pub fn cli_options() -> Array[CliOption] {
   [
     {
-      names: ["--files"],
-      value_hint: Some("<file1>,<file2>,..."),
-      description: "Comma-separated list of files to include in the working tree",
-      required: true,
+      names: ["--execute"],
+      value_hint: None,
+      description: "Execute git commands after simulation succeeds",
+      required: false,
     },
     {
       names: ["--help", "-h"],
@@ -34,7 +34,12 @@ pub fn cli_options() -> Array[CliOption] {
 pub fn operation_defs() -> Array[OperationDef] {
   [
     { syntax: "add <file>", description: "Stage a file from the working tree" },
+    { syntax: "add .", description: "Stage all modified and untracked files" },
     { syntax: "commit", description: "Create a commit from staged files" },
+    {
+      syntax: "commit -m '<msg>'",
+      description: "Create a commit with the given message",
+    },
     {
       syntax: "reset --soft HEAD~N",
       description: "Move HEAD back N commits, keep changes staged",
@@ -83,9 +88,7 @@ pub fn format_help() -> String {
     "gitfilm - Emulate git operations and visualize state transitions\n\n",
   )
   buf.write_string("Usage:\n")
-  buf.write_string(
-    "  gitfilm --files <file1>,<file2>,... '<op1>' '<op2>' ...\n\n",
-  )
+  buf.write_string("  gitfilm '<op1>' '<op2>' ...\n\n")
   let options = cli_options()
   buf.write_string("Options:\n")
   let mut max_opt_width = 0
@@ -119,7 +122,7 @@ pub fn format_help() -> String {
   buf.write_string("\n")
   buf.write_string("Example:\n")
   buf.write_string(
-    "  gitfilm --files main.rs,lib.rs 'add main.rs' 'commit' 'reset --soft HEAD~1'\n",
+    "  gitfilm 'add .' \"commit -m 'init'\" 'reset --soft HEAD~1'\n",
   )
   buf.to_string()
 }

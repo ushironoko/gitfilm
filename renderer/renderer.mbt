@@ -125,7 +125,6 @@ pub fn render_state(state : @model.GitState, label : String) -> String {
   let buf = StringBuilder::new()
   buf.write_string("=== \{label} ===\n")
   let paths = collect_all_paths(state)
-  // Working Tree
   buf.write_string("[Working Tree]  ")
   let mut wt_has_entries = false
   for path in paths {
@@ -143,7 +142,6 @@ pub fn render_state(state : @model.GitState, label : String) -> String {
   if not(wt_has_entries) {
     buf.write_string("(empty)\n")
   }
-  // Staging Area
   buf.write_string("[Staging Area]  ")
   let mut sa_has_entries = false
   for path in paths {
@@ -161,7 +159,6 @@ pub fn render_state(state : @model.GitState, label : String) -> String {
   if not(sa_has_entries) {
     buf.write_string("(empty)\n")
   }
-  // Repository
   buf.write_string("[Repository]    ")
   let mut repo_has_entries = false
   for path in paths {
@@ -192,4 +189,177 @@ pub fn render_comparison(
   let prev_output = render_state(prev, "prev")
   let next_output = render_state(next, "next (after: \{ops_desc})")
   prev_output + "\n" + next_output
+}
+
+///|
+pub(all) struct PorcelainEntry {
+  staging : Char
+  worktree : Char
+  path : String
+} derive(Show, Eq)
+
+///|
+pub fn parse_porcelain_status(output : String) -> Array[PorcelainEntry] {
+  let entries : Array[PorcelainEntry] = []
+  if output == "" {
+    return entries
+  }
+  let lines = output.split("\n").map(fn(sv) { sv.to_string() }).collect()
+  for line in lines {
+    if line.length() < 3 {
+      continue
+    }
+    let staging = line.code_unit_at(0).unsafe_to_char()
+    let worktree = line.code_unit_at(1).unsafe_to_char()
+    let path = line[3:].to_string()
+    entries.push({ staging, worktree, path })
+  }
+  entries
+}
+
+///|
+fn format_porcelain_wt_status(entry : PorcelainEntry) -> String {
+  match entry.worktree {
+    'M' => "modified"
+    'D' => "deleted"
+    '?' => "untracked"
+    _ =>
+      // Staged deletion means file is absent from working tree
+      if entry.staging == 'D' {
+        "deleted"
+      } else {
+        "clean"
+      }
+  }
+}
+
+///|
+fn format_porcelain_sa_status(entry : PorcelainEntry) -> String? {
+  match entry.staging {
+    'A' => Some("staged (new file)")
+    'M' => Some("staged (modified)")
+    'D' => Some("staged (deleted)")
+    _ => None
+  }
+}
+
+///|
+fn render_area_files(
+  buf : StringBuilder,
+  label : String,
+  paths : Array[String],
+  entries : Array[PorcelainEntry],
+  format_fn : (PorcelainEntry) -> String?,
+  default_fn : (String) -> String,
+  empty_label : String,
+) -> Unit {
+  buf.write_string("\{label}")
+  let padding = " ".repeat(label.length())
+  let mut first = true
+  for path in paths {
+    let mut found_status : String? = None
+    for e in entries {
+      if e.path == path {
+        found_status = format_fn(e)
+        break
+      }
+    }
+    let status = found_status.unwrap_or(default_fn(path))
+    if status == "" {
+      continue
+    }
+    if not(first) {
+      buf.write_string(padding)
+    }
+    buf.write_string("\{path}: \{status}\n")
+    first = false
+  }
+  if first {
+    buf.write_string("\{empty_label}\n")
+  }
+}
+
+///|
+fn render_log(buf : StringBuilder, label : String, log_output : String) -> Unit {
+  buf.write_string(label)
+  if log_output == "" {
+    buf.write_string("(no commits)\n")
+  } else {
+    let padding = " ".repeat(label.length())
+    let commits = log_output
+      .split("\n")
+      .map(fn(sv) { sv.to_string() })
+      .filter(fn(s) { s != "" })
+      .collect()
+    let mut first = true
+    for c in commits {
+      if not(first) {
+        buf.write_string(padding)
+      }
+      buf.write_string("\{c}\n")
+      first = false
+    }
+  }
+}
+
+///|
+pub fn render_from_sim_result(
+  result : @executor.SimResult,
+  ops : Array[@model.Operation],
+) -> String {
+  let ops_desc = ops.map(fn(op) { op.to_string() }).join(", ")
+  let buf = StringBuilder::new()
+  let touched = result.touched_paths
+  let prev_entries = parse_porcelain_status(result.prev_porcelain_status)
+  let next_entries = parse_porcelain_status(result.porcelain_status)
+  let prev_tracked : Map[String, Unit] = {}
+  for p in result.prev_tracked_paths {
+    prev_tracked[p] = ()
+  }
+  let next_tracked : Map[String, Unit] = {}
+  for p in result.tracked_paths {
+    next_tracked[p] = ()
+  }
+  buf.write_string("=== prev ===\n")
+  render_area_files(
+    buf,
+    "[Working Tree]  ",
+    touched,
+    prev_entries,
+    fn(e) { Some(format_porcelain_wt_status(e)) },
+    fn(path) { if prev_tracked.contains(path) { "clean" } else { "" } },
+    "(empty)",
+  )
+  render_area_files(
+    buf,
+    "[Staging Area]  ",
+    touched,
+    prev_entries,
+    fn(e) { format_porcelain_sa_status(e) },
+    fn(_) { "" },
+    "(empty)",
+  )
+  render_log(buf, "[Repository]    ", result.prev_log_output)
+  buf.write_string("\n")
+  buf.write_string("=== next (after: \{ops_desc}) ===\n")
+  render_area_files(
+    buf,
+    "[Working Tree]  ",
+    touched,
+    next_entries,
+    fn(e) { Some(format_porcelain_wt_status(e)) },
+    fn(path) { if next_tracked.contains(path) { "clean" } else { "" } },
+    "(empty)",
+  )
+  render_area_files(
+    buf,
+    "[Staging Area]  ",
+    touched,
+    next_entries,
+    fn(e) { format_porcelain_sa_status(e) },
+    fn(_) { "" },
+    "(empty)",
+  )
+  render_log(buf, "[Repository]    ", result.log_output)
+  buf.to_string()
 }

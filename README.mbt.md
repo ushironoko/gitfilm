@@ -2,7 +2,7 @@
 
 A CLI tool that emulates git operations and visualizes state transitions with prev/next snapshots.
 
-It simulates git operations without touching any real repository, displaying file states across the 3-area model: Working Tree / Staging Area / Repository.
+By default, it simulates git operations without touching any real repository, displaying file states across the 3-area model: Working Tree / Staging Area / Repository. With `--execute`, it can replay operations against your actual repository after a sandbox dry-run.
 
 ## Installation
 
@@ -34,14 +34,29 @@ moon build --target native --release
 ## Usage
 
 ```bash
-moon run cmd/main --target native -- --files <file1>,<file2>,... '<op1>' '<op2>' ...
+moon run cmd/main --target native -- '<op1>' '<op2>' ...
 ```
+
+### `--execute` flag
+
+By default, gitfilm simulates operations without touching any real repository. With `--execute`, it runs the git commands against your actual repository:
+
+```bash
+gitfilm --execute 'add main.rs' 'commit -m "initial commit"'
+```
+
+**Safety model:**
+
+1. Operations are first simulated in an isolated git worktree (sandbox).
+2. If simulation succeeds, the same operations are replayed against the real repository.
+3. Resets past the root commit are rejected in `--execute` mode.
+
+> **Warning**: `--execute` mutates your real repository. Always ensure your working tree is in a known state before using it.
 
 ### Basic example
 
 ```bash
 moon run cmd/main --target native -- \
-  --files main.rs,lib.rs \
   'add main.rs' \
   'commit' \
   'reset --soft HEAD~1'
@@ -83,17 +98,14 @@ Output:
 ```bash
 # --soft: only HEAD moves back. Changes remain staged.
 moon run cmd/main --target native -- \
-  --files main.rs \
   'add main.rs' 'commit' 'reset --soft HEAD~1'
 
 # --mixed (default): HEAD moves back and staging is cleared. Working tree unchanged.
 moon run cmd/main --target native -- \
-  --files main.rs \
   'add main.rs' 'commit' 'reset --mixed HEAD~1'
 
 # --hard: everything is discarded.
 moon run cmd/main --target native -- \
-  --files main.rs \
   'add main.rs' 'commit' 'reset --hard HEAD~1'
 ```
 

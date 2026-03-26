@@ -82,6 +82,7 @@ test "render: committed files" {
   let wt = make_files([("main.rs", "fn main() {}")])
   let commit : @model.Commit = {
     id: "c000001",
+    message: (None : String?),
     files: make_files([("main.rs", "fn main() {}")]),
     parent: (None : String?),
   }
@@ -103,11 +104,12 @@ test "render: comparison prev/next" {
   let prev = make_state(make_files([("main.rs", "v1")]), {}, [], -1)
   let commit : @model.Commit = {
     id: "c000001",
+    message: (None : String?),
     files: make_files([("main.rs", "v1")]),
     parent: (None : String?),
   }
   let next = make_state(make_files([("main.rs", "v1")]), {}, [commit], 0)
-  let ops = [@model.Operation::Add("main.rs"), @model.Operation::Commit]
+  let ops = [@model.Operation::Add("main.rs"), @model.Operation::Commit(None)]
   inspect(
     @renderer.render_comparison(prev, next, ops),
     content=(
@@ -116,7 +118,7 @@ test "render: comparison prev/next" {
       #|[Staging Area]  (empty)
       #|[Repository]    (no commits)
       #|
-      #|=== next (after: Add("main.rs"), Commit) ===
+      #|=== next (after: Add("main.rs"), Commit(None)) ===
       #|[Working Tree]  main.rs: clean
       #|[Staging Area]  (empty)
       #|[Repository]    main.rs: committed (c000001)
@@ -136,10 +138,21 @@ test "render: full scenario add, commit, reset --soft" {
   let ops = [
     @model.Operation::Add("main.rs"),
     @model.Operation::Add("lib.rs"),
-    @model.Operation::Commit,
+    @model.Operation::Commit(None),
     @model.Operation::ResetSoft(1),
   ]
-  let final_state = @emulator.execute_all(initial, ops).unwrap()
+  let commit : @model.Commit = {
+    id: "c000001",
+    message: (None : String?),
+    files: make_files([("main.rs", "line1\nline2"), ("lib.rs", "pub fn x() {}")]),
+    parent: (None : String?),
+  }
+  let final_state = make_state(
+    make_files([("main.rs", "line1\nline2"), ("lib.rs", "pub fn x() {}")]),
+    make_files([("main.rs", "line1\nline2"), ("lib.rs", "pub fn x() {}")]),
+    [commit],
+    -1,
+  )
   inspect(
     @renderer.render_comparison(initial, final_state, ops),
     content=(
@@ -149,13 +162,53 @@ test "render: full scenario add, commit, reset --soft" {
       #|[Staging Area]  (empty)
       #|[Repository]    (no commits)
       #|
-      #|=== next (after: Add("main.rs"), Add("lib.rs"), Commit, ResetSoft(1)) ===
+      #|=== next (after: Add("main.rs"), Add("lib.rs"), Commit(None), ResetSoft(1)) ===
       #|[Working Tree]  lib.rs: clean
       #|                main.rs: clean
       #|[Staging Area]  lib.rs: staged    (+1 -0)
       #|                main.rs: staged    (+2 -0)
       #|[Repository]    (no commits)
       #|
+    ),
+  )
+}
+
+///|
+test "parse_porcelain_status: staged new file" {
+  inspect(
+    @renderer.parse_porcelain_status("A  main.rs"),
+    content=(
+      #|[{staging: 'A', worktree: ' ', path: "main.rs"}]
+    ),
+  )
+}
+
+///|
+test "parse_porcelain_status: untracked" {
+  inspect(
+    @renderer.parse_porcelain_status("?? main.rs"),
+    content=(
+      #|[{staging: '?', worktree: '?', path: "main.rs"}]
+    ),
+  )
+}
+
+///|
+test "parse_porcelain_status: empty" {
+  inspect(
+    @renderer.parse_porcelain_status(""),
+    content=(
+      #|[]
+    ),
+  )
+}
+
+///|
+test "parse_porcelain_status: multiple entries" {
+  inspect(
+    @renderer.parse_porcelain_status("A  main.rs\n?? lib.rs"),
+    content=(
+      #|[{staging: 'A', worktree: ' ', path: "main.rs"}, {staging: '?', worktree: '?', path: "lib.rs"}]
     ),
   )
 }

@@ -18,6 +18,8 @@ pub fn parse_operation(String) -> Result[@model.Operation, String]
 
 pub fn should_show_help(Array[String]) -> Bool
 
+pub fn tokenize(String) -> Array[String]
+
 // Errors
 
 // Types and methods
@@ -36,8 +38,8 @@ pub(all) struct OperationDef {
 pub impl Show for OperationDef
 
 pub(all) struct ParsedInput {
-  file_paths : Array[String]
   operations : Array[@model.Operation]
+  execute : Bool
 }
 pub impl Show for ParsedInput
 

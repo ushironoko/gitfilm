@@ -11,6 +11,7 @@ pub fn generate_commit_id(Int) -> String
 // Types and methods
 pub(all) struct Commit {
   id : String
+  message : String?
   files : Map[String, FileContent]
   parent : String?
 }
@@ -42,6 +43,12 @@ pub(all) enum FileStatus {
 }
 pub impl Show for FileStatus
 
+pub(all) struct GitCommand {
+  args : Array[String]
+}
+pub impl Eq for GitCommand
+pub impl Show for GitCommand
+
 pub(all) struct GitState {
   working_tree : WorkingTree
   staging_area : StagingArea
@@ -52,7 +59,7 @@ pub impl Show for GitState
 
 pub(all) enum Operation {
   Add(String)
-  Commit
+  Commit(String?)
   ResetSoft(Int)
   ResetMixed(Int)
   ResetHard(Int)
