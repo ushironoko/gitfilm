@@ -34,7 +34,7 @@ moon build --target native --release
 ## Usage
 
 ```bash
-moon run cmd/main --target native -- --files <file1>,<file2>,... '<op1>' '<op2>' ...
+moon run cmd/main --target native -- '<op1>' '<op2>' ...
 ```
 
 ### `--execute` flag
@@ -42,7 +42,7 @@ moon run cmd/main --target native -- --files <file1>,<file2>,... '<op1>' '<op2>'
 By default, gitfilm simulates operations without touching any real repository. With `--execute`, it runs the git commands against your actual repository:
 
 ```bash
-gitfilm --execute 'add main.rs' 'commit'
+gitfilm --execute 'add main.rs' 'commit -m "initial commit"'
 ```
 
 **Safety model:**
@@ -57,7 +57,6 @@ gitfilm --execute 'add main.rs' 'commit'
 
 ```bash
 moon run cmd/main --target native -- \
-  --files main.rs,lib.rs \
   'add main.rs' \
   'commit' \
   'reset --soft HEAD~1'
@@ -99,17 +98,14 @@ Output:
 ```bash
 # --soft: only HEAD moves back. Changes remain staged.
 moon run cmd/main --target native -- \
-  --files main.rs \
   'add main.rs' 'commit' 'reset --soft HEAD~1'
 
 # --mixed (default): HEAD moves back and staging is cleared. Working tree unchanged.
 moon run cmd/main --target native -- \
-  --files main.rs \
   'add main.rs' 'commit' 'reset --mixed HEAD~1'
 
 # --hard: everything is discarded.
 moon run cmd/main --target native -- \
-  --files main.rs \
   'add main.rs' 'commit' 'reset --hard HEAD~1'
 ```
 

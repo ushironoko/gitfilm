@@ -223,7 +223,13 @@ fn format_porcelain_wt_status(entry : PorcelainEntry) -> String {
     'M' => "modified"
     'D' => "deleted"
     '?' => "untracked"
-    _ => "clean"
+    _ =>
+      // Staged deletion means file is absent from working tree
+      if entry.staging == 'D' {
+        "deleted"
+      } else {
+        "clean"
+      }
   }
 }
 

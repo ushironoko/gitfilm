@@ -120,6 +120,57 @@ fn extract_paths_from_porcelain(porcelain : String) -> Array[String] {
 }
 
 ///|
+fn get_head_hash(repo_path : String) -> String? {
+  match git_in(repo_path, ["rev-parse", "HEAD"]) {
+    Ok(output) => Some(trim_end(output))
+    Err(_) => None
+  }
+}
+
+///|
+fn extract_lines(output : String) -> Array[String] {
+  if output == "" {
+    return []
+  }
+  let lines : Array[String] = output
+    .split("\n")
+    .map(fn(sv) { sv.to_string() })
+    .filter(fn(s) { s != "" })
+    .collect()
+  lines
+}
+
+///|
+fn collect_tree_diff_paths(
+  repo_path : String,
+  before_head : String?,
+  after_head : String?,
+) -> Array[String] {
+  match (before_head, after_head) {
+    (Some(old), Some(new_h)) =>
+      if old == new_h {
+        []
+      } else {
+        extract_lines(
+          git_in(
+            repo_path,
+            ["diff-tree", "--no-commit-id", "--name-only", "-r", old, new_h],
+          ).unwrap_or(""),
+        )
+      }
+    (Some(hash), None) =>
+      extract_lines(
+        git_in(repo_path, ["ls-tree", "--name-only", "-r", hash]).unwrap_or(""),
+      )
+    (None, Some(hash)) =>
+      extract_lines(
+        git_in(repo_path, ["ls-tree", "--name-only", "-r", hash]).unwrap_or(""),
+      )
+    (None, None) => []
+  }
+}
+
+///|
 fn dedupe_and_sort(arr : Array[String]) -> Array[String] {
   let seen : Map[String, Unit] = {}
   for s in arr {
@@ -149,6 +200,7 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
     let before_paths = extract_paths_from_porcelain(
       git_in(wt_path, ["status", "--porcelain"]).unwrap_or(""),
     )
+    let before_head = get_head_hash(wt_path)
     match run_op(wt_path, op, log) {
       Ok(_) => ()
       Err(e) => {
@@ -159,10 +211,15 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
     let after_paths = extract_paths_from_porcelain(
       git_in(wt_path, ["status", "--porcelain"]).unwrap_or(""),
     )
+    let after_head = get_head_hash(wt_path)
     for p in before_paths {
       all_touched.push(p)
     }
     for p in after_paths {
+      all_touched.push(p)
+    }
+    let tree_diff = collect_tree_diff_paths(wt_path, before_head, after_head)
+    for p in tree_diff {
       all_touched.push(p)
     }
     match op {
