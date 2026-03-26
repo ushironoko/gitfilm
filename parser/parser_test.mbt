@@ -7,9 +7,15 @@ test "parse_operation: all valid patterns" {
     ),
   )
   inspect(
+    @parser.parse_operation("add ."),
+    content=(
+      #|Ok(Add("."))
+    ),
+  )
+  inspect(
     @parser.parse_operation("commit"),
     content=(
-      #|Ok(Commit)
+      #|Ok(Commit(None))
     ),
   )
   inspect(
@@ -63,6 +69,82 @@ test "parse_operation: all valid patterns" {
 }
 
 ///|
+test "parse_operation: commit with message" {
+  inspect(
+    @parser.parse_operation("commit -m 'initial commit'"),
+    content=(
+      #|Ok(Commit(Some("initial commit")))
+    ),
+  )
+  inspect(
+    @parser.parse_operation("commit -m init"),
+    content=(
+      #|Ok(Commit(Some("init")))
+    ),
+  )
+}
+
+///|
+test "tokenize: quotes handling" {
+  inspect(
+    @parser.tokenize("commit -m 'initial commit'"),
+    content=(
+      #|["commit", "-m", "initial commit"]
+    ),
+  )
+  inspect(
+    @parser.tokenize("add 'my file.rs'"),
+    content=(
+      #|["add", "my file.rs"]
+    ),
+  )
+  inspect(
+    @parser.tokenize("commit -m \"hello world\""),
+    content=(
+      #|["commit", "-m", "hello world"]
+    ),
+  )
+  inspect(
+    @parser.tokenize("simple command"),
+    content=(
+      #|["simple", "command"]
+    ),
+  )
+}
+
+///|
+test "parse_args: basic usage" {
+  inspect(
+    @parser.parse_args(["gitfilm", "add main.rs", "commit"]),
+    content=(
+      #|Ok({operations: [Add("main.rs"), Commit(None)], execute: false})
+    ),
+  )
+}
+
+///|
+test "parse_args: with --execute flag" {
+  inspect(
+    @parser.parse_args([
+      "gitfilm", "add main.rs", "commit -m 'init'", "--execute",
+    ]),
+    content=(
+      #|Ok({operations: [Add("main.rs"), Commit(Some("init"))], execute: true})
+    ),
+  )
+}
+
+///|
+test "parse_args: --execute with Commit(None) is error" {
+  inspect(
+    @parser.parse_args(["gitfilm", "add main.rs", "commit", "--execute"]),
+    content=(
+      #|Err("--execute requires commit message: use 'commit -m \"message\"'")
+    ),
+  )
+}
+
+///|
 test "parse_operation: error cases" {
   inspect(
     @parser.parse_operation("merge main"),
@@ -85,26 +167,9 @@ test "parse_operation: error cases" {
 }
 
 ///|
-test "parse_args: basic usage" {
-  let args = ["git-film", "--files", "main.rs,lib.rs", "add main.rs", "commit"]
-  inspect(
-    @parser.parse_args(args),
-    content=(
-      #|Ok({file_paths: ["main.rs", "lib.rs"], operations: [Add("main.rs"), Commit]})
-    ),
-  )
-}
-
-///|
 test "parse_args: error cases" {
   inspect(
-    @parser.parse_args(["git-film", "add main.rs"]),
-    content=(
-      #|Err("--files is required")
-    ),
-  )
-  inspect(
-    @parser.parse_args(["git-film", "--files", "main.rs"]),
+    @parser.parse_args(["gitfilm"]),
     content=(
       #|Err("At least one operation is required")
     ),
@@ -129,15 +194,12 @@ test "should_show_help: -h flag" {
 ///|
 test "should_show_help: --help mixed with other args" {
   inspect(
-    @parser.should_show_help(["gitfilm", "--files", "main.rs", "--help"]),
+    @parser.should_show_help(["gitfilm", "add .", "--help"]),
     content="true",
   )
 }
 
 ///|
 test "should_show_help: normal args without help" {
-  inspect(
-    @parser.should_show_help(["gitfilm", "--files", "main.rs", "add main.rs"]),
-    content="false",
-  )
+  inspect(@parser.should_show_help(["gitfilm", "add main.rs"]), content="false")
 }

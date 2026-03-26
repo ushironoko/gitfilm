@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "ushironoko/gitfilm/executor"
+
+import {
+  "ushironoko/gitfilm/model",
+}
+
+// Values
+pub fn create_worktree() -> Result[String, String]
+
+pub fn execute(Array[@model.Operation]) -> Result[String, String]
+
+pub fn remove_worktree(String) -> Result[Unit, String]
+
+pub fn simulate(Array[@model.Operation]) -> Result[SimResult, String]
+
+pub fn to_git_args(@model.Operation) -> @model.GitCommand
+
+pub fn validate_git_repo(String) -> Result[Unit, String]
+
+// Errors
+
+// Types and methods
+pub(all) struct SimResult {
+  prev_porcelain_status : String
+  prev_log_output : String
+  porcelain_status : String
+  diff_stat : String
+  log_output : String
+  touched_paths : Array[String]
+  exec_log : String
+}
+pub impl Show for SimResult
+
+// Type aliases
+
+// Traits
+

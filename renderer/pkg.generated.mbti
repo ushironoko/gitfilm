@@ -2,17 +2,29 @@
 package "ushironoko/gitfilm/renderer"
 
 import {
+  "ushironoko/gitfilm/executor",
   "ushironoko/gitfilm/model",
 }
 
 // Values
+pub fn parse_porcelain_status(String) -> Array[PorcelainEntry]
+
 pub fn render_comparison(@model.GitState, @model.GitState, Array[@model.Operation]) -> String
+
+pub fn render_from_sim_result(@executor.SimResult, Array[@model.Operation]) -> String
 
 pub fn render_state(@model.GitState, String) -> String
 
 // Errors
 
 // Types and methods
+pub(all) struct PorcelainEntry {
+  staging : Char
+  worktree : Char
+  path : String
+}
+pub impl Eq for PorcelainEntry
+pub impl Show for PorcelainEntry
 
 // Type aliases
 

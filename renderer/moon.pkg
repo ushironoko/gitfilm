@@ -1,7 +1,4 @@
 import {
   "ushironoko/gitfilm/model",
+  "ushironoko/gitfilm/executor",
 }
-
-import {
-  "ushironoko/gitfilm/emulator",
-} for "test"

@@ -1,0 +1,158 @@
+///|
+fn git_in(path : String, args : Array[String]) -> Result[String, String] {
+  let full_args : Array[String] = ["-C", path]
+  for a in args {
+    full_args.push(a)
+  }
+  match @process.exec("git", full_args, ".") {
+    Ok((output, exit_code)) =>
+      if exit_code == 0 {
+        Ok(output)
+      } else {
+        let args_str = args.join(" ")
+        Err("git \{args_str} failed (exit \{exit_code}): \{output}")
+      }
+    Err(e) => Err(e)
+  }
+}
+
+///|
+fn generate_worktree_path() -> Result[String, String] {
+  match @process.exec("date", ["+%s%N"], ".") {
+    Ok((output, _)) => {
+      let ts = trim_end(output)
+      Ok("/tmp/gitfilm-wt-\{ts}")
+    }
+    Err(e) => Err(e)
+  }
+}
+
+///|
+fn check_head_exists() -> Result[Unit, String] {
+  match @process.exec("git", ["rev-parse", "HEAD"], ".") {
+    Ok((_, code)) =>
+      if code == 0 {
+        Ok(())
+      } else {
+        Err("repository has no commits (HEAD does not exist)")
+      }
+    Err(e) => Err(e)
+  }
+}
+
+///|
+pub fn create_worktree() -> Result[String, String] {
+  match validate_git_repo(".") {
+    Ok(_) => ()
+    Err(e) => return Err(e)
+  }
+  match check_head_exists() {
+    Ok(_) => ()
+    Err(e) => return Err(e)
+  }
+  let wt_path = match generate_worktree_path() {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  match
+    @process.exec("git", ["worktree", "add", wt_path, "--detach", "HEAD"], ".") {
+    Ok((_, code)) => if code != 0 { return Err("Failed to create worktree") }
+    Err(e) => return Err(e)
+  }
+  match sync_dirty_files(wt_path) {
+    Ok(_) => ()
+    Err(e) => {
+      let _ = remove_worktree(wt_path)
+      return Err(e)
+    }
+  }
+  Ok(wt_path)
+}
+
+///|
+fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
+  let modified = match
+    @process.exec("git", ["diff", "--name-only", "HEAD"], ".") {
+    Ok((output, _)) =>
+      output
+      .split("\n")
+      .map(fn(sv) { sv.to_string() })
+      .filter(fn(s) { s != "" })
+      .collect()
+    Err(_) => []
+  }
+  let untracked = match
+    @process.exec("git", ["ls-files", "--others", "--exclude-standard"], ".") {
+    Ok((output, _)) =>
+      output
+      .split("\n")
+      .map(fn(sv) { sv.to_string() })
+      .filter(fn(s) { s != "" })
+      .collect()
+    Err(_) => []
+  }
+  let all_dirty : Array[String] = []
+  for f in modified {
+    all_dirty.push(f)
+  }
+  for f in untracked {
+    all_dirty.push(f)
+  }
+  for file in all_dirty {
+    let dest = wt_path + "/" + file
+    let parent = extract_parent_dir(dest)
+    if parent != "" {
+      let _ = @process.exec("mkdir", ["-p", parent], ".")
+    }
+    let _ = @process.exec("cp", [file, dest], ".")
+  }
+  Ok(())
+}
+
+///|
+fn extract_parent_dir(path : String) -> String {
+  let chars = path.to_array()
+  let mut last_slash = -1
+  for i, c in chars {
+    if c == '/' {
+      last_slash = i
+    }
+  }
+  if last_slash <= 0 {
+    ""
+  } else {
+    String::from_array(chars[0:last_slash].to_array())
+  }
+}
+
+///|
+pub fn remove_worktree(wt_path : String) -> Result[Unit, String] {
+  let _ = @process.exec("git", ["worktree", "remove", wt_path, "--force"], ".")
+  // worktree remove may leave the directory if untracked files exist
+  let _ = @process.exec("rm", ["-rf", wt_path], ".")
+  let _ = @process.exec("git", ["worktree", "prune"], ".")
+  Ok(())
+}
+
+///|
+pub fn validate_git_repo(path : String) -> Result[Unit, String] {
+  match git_in(path, ["rev-parse", "--is-inside-work-tree"]) {
+    Ok(_) => Ok(())
+    Err(_) => Err("'\{path}' is not a git repository")
+  }
+}
+
+///|
+fn trim_end(s : String) -> String {
+  let chars = s.to_array()
+  let mut end = chars.length()
+  while end > 0 {
+    let c = chars[end - 1]
+    if c == '\n' || c == '\r' || c == ' ' || c == '\t' {
+      end -= 1
+    } else {
+      break
+    }
+  }
+  String::from_array(chars[0:end].to_array())
+}

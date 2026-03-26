@@ -12,6 +12,7 @@ pub(all) struct DiffSummary {
 ///|
 pub(all) struct Commit {
   id : String
+  message : String?
   files : Map[String, FileContent]
   parent : String?
 } derive(Show)
@@ -43,7 +44,7 @@ pub(all) struct GitState {
 ///|
 pub(all) enum Operation {
   Add(String)
-  Commit
+  Commit(String?)
   ResetSoft(Int)
   ResetMixed(Int)
   ResetHard(Int)
@@ -51,6 +52,11 @@ pub(all) enum Operation {
   Checkout(String)
   Rm(String)
 } derive(Show)
+
+///|
+pub(all) struct GitCommand {
+  args : Array[String]
+} derive(Show, Eq)
 
 ///|
 pub(all) enum FileStatus {

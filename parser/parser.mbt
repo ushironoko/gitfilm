@@ -1,7 +1,7 @@
 ///|
 pub(all) struct ParsedInput {
-  file_paths : Array[String]
   operations : Array[@model.Operation]
+  execute : Bool
 } derive(Show)
 
 ///|
@@ -26,15 +26,55 @@ fn parse_head_ref(s : String) -> Result[Int, String] {
 }
 
 ///|
+pub fn tokenize(s : String) -> Array[String] {
+  let tokens : Array[String] = []
+  let buf = StringBuilder::new()
+  let mut in_single = false
+  let mut in_double = false
+  for c in s {
+    if in_single {
+      if c == '\'' {
+        in_single = false
+      } else {
+        buf.write_char(c)
+      }
+    } else if in_double {
+      if c == '"' {
+        in_double = false
+      } else {
+        buf.write_char(c)
+      }
+    } else if c == '\'' {
+      in_single = true
+    } else if c == '"' {
+      in_double = true
+    } else if c == ' ' {
+      let token = buf.to_string()
+      if token != "" {
+        tokens.push(token)
+      }
+      buf.reset()
+    } else {
+      buf.write_char(c)
+    }
+  }
+  let last = buf.to_string()
+  if last != "" {
+    tokens.push(last)
+  }
+  tokens
+}
+
+///|
 pub fn parse_operation(s : String) -> Result[@model.Operation, String] {
-  let tokens = s
-    .split(" ")
-    .map(fn(sv) { sv.to_string() })
-    .filter(fn(t) { t != "" })
-    .collect()
+  let tokens = tokenize(s)
   match tokens {
     ["add", file, ..] => Ok(@model.Operation::Add(file))
-    ["commit", ..] => Ok(@model.Operation::Commit)
+    ["commit"] => Ok(@model.Operation::Commit(None))
+    ["commit", "-m", .. rest] if rest.length() > 0 => {
+      let msg = rest.join(" ")
+      Ok(@model.Operation::Commit(Some(msg)))
+    }
     ["reset", "--soft", head_ref, ..] =>
       parse_head_ref(head_ref).map(fn(n) { @model.Operation::ResetSoft(n) })
     ["reset", "--mixed", head_ref, ..] =>
@@ -67,26 +107,14 @@ pub fn should_show_help(args : Array[String]) -> Bool {
 ///|
 pub fn parse_args(args : Array[String]) -> Result[ParsedInput, String] {
   let skip_args = args[1:]
-  let mut file_paths : Array[String] = []
   let op_strings : Array[String] = []
-  let mut i = 0
-  while i < skip_args.length() {
-    if skip_args[i] == "--files" {
-      if i + 1 >= skip_args.length() {
-        return Err("--files requires a comma-separated file list")
-      }
-      file_paths = skip_args[i + 1]
-        .split(",")
-        .map(fn(sv) { sv.to_string() })
-        .collect()
-      i = i + 2
+  let mut execute = false
+  for a in skip_args {
+    if a == "--execute" {
+      execute = true
     } else {
-      op_strings.push(skip_args[i])
-      i = i + 1
+      op_strings.push(a)
     }
-  }
-  if file_paths.is_empty() {
-    return Err("--files is required")
   }
   if op_strings.is_empty() {
     return Err("At least one operation is required")
@@ -98,5 +126,16 @@ pub fn parse_args(args : Array[String]) -> Result[ParsedInput, String] {
       Err(e) => return Err(e)
     }
   }
-  Ok({ file_paths, operations })
+  if execute {
+    for op in operations {
+      match op {
+        Commit(None) =>
+          return Err(
+            "--execute requires commit message: use 'commit -m \"message\"'",
+          )
+        _ => ()
+      }
+    }
+  }
+  Ok({ operations, execute })
 }

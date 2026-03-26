@@ -1,0 +1,7 @@
+options(
+  "native-stub": [ "process_native.c" ],
+  targets: {
+    "process_native.mbt": [ "native" ],
+    "process_stub.mbt": [ "wasm", "wasm-gc", "js" ],
+  },
+)

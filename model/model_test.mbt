@@ -117,6 +117,7 @@ test "Repository::head_commit empty" {
 test "Repository::head_commit with commit" {
   let commit : @model.Commit = {
     id: "c000001",
+    message: (None : String?),
     files: {},
     parent: (None : String?),
   }
@@ -124,7 +125,7 @@ test "Repository::head_commit with commit" {
   inspect(
     repo.head_commit(),
     content=(
-      #|Some({id: "c000001", files: {}, parent: None})
+      #|Some({id: "c000001", message: None, files: {}, parent: None})
     ),
   )
 }
@@ -135,6 +136,7 @@ test "Repository::get_file_at_head found" {
   files["test.rs"] = { lines: ["hello"] }
   let commit : @model.Commit = {
     id: "c000001",
+    message: (None : String?),
     files,
     parent: (None : String?),
   }
@@ -151,6 +153,7 @@ test "Repository::get_file_at_head found" {
 test "Repository::get_file_at_head missing" {
   let commit : @model.Commit = {
     id: "c000001",
+    message: (None : String?),
     files: {},
     parent: (None : String?),
   }
