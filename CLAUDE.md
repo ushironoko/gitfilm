@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 moon check                              # Type-check without building
 moon test                               # Run all tests
 moon test --update                      # Run tests and auto-update snapshots
-moon test --package ushironoko/gitfilm/emulator  # Run tests for a single package
+moon test --package ushironoko/gitfilm/executor  # Run tests for a single package
 moon build --target native              # Build native executable
-moon run cmd/main --target native -- --files f1.rs 'add f1.rs' 'commit'  # Run directly
+moon run cmd/main --target native -- 'add main.rs' 'commit -m "init"'  # Run directly
 moon fmt                                # Format code
 moon info                               # Regenerate .mbti interface files
 moon info && moon fmt                   # Pre-commit: update interfaces and format
@@ -18,15 +18,16 @@ moon info && moon fmt                   # Pre-commit: update interfaces and form
 
 ## Architecture
 
-gitfilm emulates git operations and visualizes state transitions using a 3-area model (Working Tree / Staging Area / Repository). It never touches real git repositories.
+gitfilm simulates git operations in an isolated worktree sandbox and visualizes state transitions using a 3-area model (Working Tree / Staging Area / Repository). With `--execute`, it can replay operations against the real repository.
 
-**Data flow**: CLI args → `parser` → `emulator` (state transitions) → `renderer` (output)
+**Data flow**: CLI args → `parser` → `executor` (sandbox simulation) → `renderer` (output)
 
-- **model/** — Core data types shared by all packages. `GitState` holds the complete snapshot (WorkingTree, StagingArea, Repository). `Operation` enum represents parsed git commands. All structs are `pub(all)` for cross-package construction.
-- **parser/** — Parses `--files` flag and operation strings (e.g. `"reset --soft HEAD~1"`) into `ParsedInput`.
-- **emulator/** — Pure function `apply(state, op) -> Result[GitState, String]` for each git operation. `execute_all` chains operations sequentially with early error return. Maps are copied before mutation to preserve immutability.
-- **renderer/** — Derives `FileStatus` by comparing content across the 3 areas (not stored, computed each time). Formats prev/next snapshots for display.
-- **cmd/main/** — Entry point. Reads actual files from disk, wires packages together.
+- **model/** — Core data types shared by all packages. `Operation` enum represents parsed git commands. All structs are `pub(all)` for cross-package construction.
+- **parser/** — Parses operation strings (e.g. `"reset --soft HEAD~1"`) and flags (`--execute`) into `ParsedInput`.
+- **executor/** — Creates a git worktree sandbox, runs operations via `simulate()`, and optionally replays them on the real repo via `execute()`. Includes preflight safety checks for `--execute` mode.
+- **process/** — FFI layer for spawning subprocesses (`git`, etc.) via `posix_spawn`. Native target only.
+- **renderer/** — Parses porcelain status output and formats prev/next snapshots for display. Computes file status from git status entries and tracked file lists.
+- **cmd/main/** — Entry point. Wires packages together.
 
 ## Testing Conventions
 

@@ -34,12 +34,12 @@ moon build --target native --release
 ## Usage
 
 ```bash
-moon run cmd/main --target native -- '<op1>' '<op2>' ...
+gitfilm '<op1>' '<op2>' ...
 ```
 
 ### `--execute` flag
 
-By default, gitfilm simulates operations without touching any real repository. With `--execute`, it runs the git commands against your actual repository:
+By default, gitfilm simulates operations in an isolated sandbox without touching any real repository. With `--execute`, it runs the git commands against your actual repository:
 
 ```bash
 gitfilm --execute 'add main.rs' 'commit -m "initial commit"'
@@ -56,10 +56,7 @@ gitfilm --execute 'add main.rs' 'commit -m "initial commit"'
 ### Basic example
 
 ```bash
-moon run cmd/main --target native -- \
-  'add main.rs' \
-  'commit' \
-  'reset --soft HEAD~1'
+gitfilm 'add main.rs' 'commit -m "initial"' 'reset --soft HEAD~1'
 ```
 
 Output:
@@ -71,10 +68,10 @@ Output:
 [Staging Area]  (empty)
 [Repository]    (no commits)
 
-=== next (after: Add("main.rs"), Commit, ResetSoft(1)) ===
+=== next (after: Add("main.rs"), Commit(Some("initial")), ResetSoft(1)) ===
 [Working Tree]  lib.rs: untracked
                 main.rs: clean
-[Staging Area]  main.rs: staged    (+N -0)
+[Staging Area]  main.rs: staged (new file)
 [Repository]    (no commits)
 ```
 
@@ -82,8 +79,8 @@ Output:
 
 | Operation | Syntax |
 |-----------|--------|
-| git add | `'add <file>'` |
-| git commit | `'commit'` |
+| git add | `'add <file>'` or `'add .'` |
+| git commit | `'commit'` or `'commit -m "message"'` |
 | git reset --soft | `'reset --soft HEAD~N'` |
 | git reset --mixed | `'reset --mixed HEAD~N'` or `'reset HEAD~N'` |
 | git reset --hard | `'reset --hard HEAD~N'` |
@@ -97,16 +94,13 @@ Output:
 
 ```bash
 # --soft: only HEAD moves back. Changes remain staged.
-moon run cmd/main --target native -- \
-  'add main.rs' 'commit' 'reset --soft HEAD~1'
+gitfilm 'add main.rs' 'commit -m "initial"' 'reset --soft HEAD~1'
 
 # --mixed (default): HEAD moves back and staging is cleared. Working tree unchanged.
-moon run cmd/main --target native -- \
-  'add main.rs' 'commit' 'reset --mixed HEAD~1'
+gitfilm 'add main.rs' 'commit -m "initial"' 'reset --mixed HEAD~1'
 
 # --hard: everything is discarded.
-moon run cmd/main --target native -- \
-  'add main.rs' 'commit' 'reset --hard HEAD~1'
+gitfilm 'add main.rs' 'commit -m "initial"' 'reset --hard HEAD~1'
 ```
 
 ## 3-area model
@@ -121,11 +115,12 @@ gitfilm visualizes git's internal 3-area model:
 
 File statuses:
 - **untracked** — not yet tracked by git
-- **modified (+N -M)** — changed (N lines added, M lines removed)
-- **staged (+N -M)** — staged for commit
-- **committed (cXXXXXX)** — stored in a commit
+- **modified** — changed in working tree
+- **staged (new file)** — newly added to staging area
+- **staged (modified)** — modified and staged
+- **staged (deleted)** — deleted and staged
 - **clean** — no changes
-- **deleted** — removed
+- **deleted** — removed from working tree
 
 ## License
 
