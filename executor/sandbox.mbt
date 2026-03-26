@@ -57,12 +57,11 @@ pub fn create_worktree() -> Result[String, String] {
   if has_head {
     match
       @process.exec(
-        "git", ["worktree", "add", wt_path, "--detach", "HEAD"], ".",
+        "git",
+        ["worktree", "add", wt_path, "--detach", "HEAD"],
+        ".",
       ) {
-      Ok((_, code)) =>
-        if code != 0 {
-          return Err("Failed to create worktree")
-        }
+      Ok((_, code)) => if code != 0 { return Err("Failed to create worktree") }
       Err(e) => return Err(e)
     }
     match sync_dirty_files(wt_path) {
@@ -98,18 +97,19 @@ fn get_source_git_dir() -> Result[String, String] {
 }
 
 ///|
-fn copy_repo_local_settings(
-  src_git_dir : String,
-  dst_git_dir : String,
-) -> Unit {
+fn copy_repo_local_settings(src_git_dir : String, dst_git_dir : String) -> Unit {
   // Reproduce source repo's local config (user.name, user.email, etc.)
   let _ = @process.exec(
-    "cp", ["-f", src_git_dir + "/config", dst_git_dir + "/config"], ".",
+    "cp",
+    ["-f", src_git_dir + "/config", dst_git_dir + "/config"],
+    ".",
   )
   // Reproduce source repo's hooks for faithful dry-run behavior
   let _ = @process.exec("rm", ["-rf", dst_git_dir + "/hooks"], ".")
   let _ = @process.exec(
-    "cp", ["-a", src_git_dir + "/hooks", dst_git_dir + "/hooks"], ".",
+    "cp",
+    ["-a", src_git_dir + "/hooks", dst_git_dir + "/hooks"],
+    ".",
   )
 }
 
@@ -160,9 +160,7 @@ fn create_fresh_sandbox(wt_path : String) -> Result[Unit, String] {
   }
   // Copy untracked files
   let untracked = match
-    @process.exec(
-      "git", ["ls-files", "--others", "--exclude-standard"], ".",
-    ) {
+    @process.exec("git", ["ls-files", "--others", "--exclude-standard"], ".") {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }
@@ -209,7 +207,9 @@ fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
   // Handle staged deletions: files removed from index but still present in worktree from HEAD
   let staged_deletions = match
     @process.exec(
-      "git", ["diff", "--cached", "--diff-filter=D", "--name-only"], ".",
+      "git",
+      ["diff", "--cached", "--diff-filter=D", "--name-only"],
+      ".",
     ) {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
@@ -221,7 +221,9 @@ fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
   // Stage files that are in the index but differ from HEAD (excluding deletions already handled)
   let staged_modified = match
     @process.exec(
-      "git", ["diff", "--cached", "--diff-filter=d", "--name-only"], ".",
+      "git",
+      ["diff", "--cached", "--diff-filter=d", "--name-only"],
+      ".",
     ) {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
@@ -231,9 +233,7 @@ fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
   }
   // Handle unstaged deletions: files in index but deleted from working tree
   let unstaged_deletions = match
-    @process.exec(
-      "git", ["diff", "--diff-filter=D", "--name-only"], ".",
-    ) {
+    @process.exec("git", ["diff", "--diff-filter=D", "--name-only"], ".") {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }
@@ -242,9 +242,7 @@ fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
   }
   // Overwrite with working tree content for unstaged modifications (excluding deletions)
   let unstaged_modified = match
-    @process.exec(
-      "git", ["diff", "--diff-filter=d", "--name-only"], ".",
-    ) {
+    @process.exec("git", ["diff", "--diff-filter=d", "--name-only"], ".") {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }
@@ -253,9 +251,7 @@ fn sync_dirty_files(wt_path : String) -> Result[Unit, String] {
   }
   // Copy untracked files
   let untracked = match
-    @process.exec(
-      "git", ["ls-files", "--others", "--exclude-standard"], ".",
-    ) {
+    @process.exec("git", ["ls-files", "--others", "--exclude-standard"], ".") {
     Ok((output, _)) => lines_from_output(output)
     Err(_) => []
   }

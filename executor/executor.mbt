@@ -28,7 +28,7 @@ fn get_commit_count(repo_path : String) -> Int {
 fn resolve_git_args(
   op : @model.Operation,
   repo_path : String,
-  sandbox~ : Bool = true,
+  sandbox? : Bool = true,
 ) -> Result[Array[Array[String]], String] {
   match op {
     ResetSoft(n) => {
@@ -79,7 +79,7 @@ fn run_op(
   repo_path : String,
   op : @model.Operation,
   log : StringBuilder,
-  sandbox~ : Bool = true,
+  sandbox? : Bool = true,
 ) -> Result[Unit, String] {
   let cmd_groups = match resolve_git_args(op, repo_path, sandbox~) {
     Ok(groups) => groups
@@ -154,10 +154,9 @@ fn collect_tree_diff_paths(
         []
       } else {
         extract_lines(
-          git_in(
-            repo_path,
-            ["diff-tree", "--no-commit-id", "--name-only", "-r", old, new_h],
-          ).unwrap_or(""),
+          git_in(repo_path, [
+            "diff-tree", "--no-commit-id", "--name-only", "-r", old, new_h,
+          ]).unwrap_or(""),
         )
       }
     (Some(hash), None) =>
@@ -240,9 +239,7 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
   )
   let diff_stat = git_in(wt_path, ["diff", "--stat"]).unwrap_or("")
   let log_output = git_in(wt_path, ["log", "--oneline", "-20"]).unwrap_or("")
-  let tracked_paths = extract_lines(
-    git_in(wt_path, ["ls-files"]).unwrap_or(""),
-  )
+  let tracked_paths = extract_lines(git_in(wt_path, ["ls-files"]).unwrap_or(""))
   match remove_worktree(wt_path) {
     Ok(_) => ()
     Err(e) => return Err(e)
@@ -262,33 +259,16 @@ pub fn simulate(ops : Array[@model.Operation]) -> Result[SimResult, String] {
 }
 
 ///|
-// Reject operation sequences that would hit a past-root reset on the real repo
-// before any mutation occurs.  Projects commit-count evolution so the check is
-// accurate even when earlier ops (commit / reset) change the count.
-fn preflight_execute_ops(
-  repo_path : String,
+// Pure validation: given an initial commit count, reject any operation sequence
+// that would reset past the root commit.
+fn validate_ops_commit_safety(
+  initial_count : Int,
   ops : Array[@model.Operation],
 ) -> Result[Unit, String] {
-  let mut count = get_commit_count(repo_path)
+  let mut count = initial_count
   for i, op in ops {
     match op {
-      ResetSoft(n) => {
-        if n >= count && count > 0 {
-          return Err(
-            "step \{i + 1}: --execute does not support resetting past the root commit",
-          )
-        }
-        count = count - n
-      }
-      ResetMixed(n) => {
-        if n >= count && count > 0 {
-          return Err(
-            "step \{i + 1}: --execute does not support resetting past the root commit",
-          )
-        }
-        count = count - n
-      }
-      ResetHard(n) => {
+      ResetSoft(n) | ResetMixed(n) | ResetHard(n) => {
         if n >= count && count > 0 {
           return Err(
             "step \{i + 1}: --execute does not support resetting past the root commit",
@@ -301,6 +281,14 @@ fn preflight_execute_ops(
     }
   }
   Ok(())
+}
+
+///|
+fn preflight_execute_ops(
+  repo_path : String,
+  ops : Array[@model.Operation],
+) -> Result[Unit, String] {
+  validate_ops_commit_safety(get_commit_count(repo_path), ops)
 }
 
 ///|
