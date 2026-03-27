@@ -76,16 +76,16 @@ MOONBIT_FFI_EXPORT moonbit_bytes_t gitfilm_exec(
   posix_spawn_file_actions_addclose(&actions, pipefd[0]);
   posix_spawn_file_actions_addclose(&actions, pipefd[1]);
 
-  /* posix_spawn has no built-in cwd support; addchdir is a non-portable extension */
-#ifdef __APPLE__
   if (strlen(working_dir) > 0) {
+    /* addchdir_np is available on macOS <26 and Linux glibc;
+       addchdir (non-_np) is the POSIX replacement on macOS >=26. */
+#if defined(__APPLE__) && defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && \
+    __MAC_OS_X_VERSION_MAX_ALLOWED >= 260000
     posix_spawn_file_actions_addchdir(&actions, working_dir);
-  }
 #else
-  if (strlen(working_dir) > 0) {
-    posix_spawn_file_actions_addchdir(&actions, working_dir);
-  }
+    posix_spawn_file_actions_addchdir_np(&actions, working_dir);
 #endif
+  }
 
   pid_t pid;
   int status = posix_spawnp(&pid, prog, &actions, NULL, argv, environ);
