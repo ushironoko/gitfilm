@@ -53,6 +53,37 @@ gitfilm --execute 'add main.rs' 'commit -m "initial commit"'
 
 > **Warning**: `--execute` mutates your real repository. Always ensure your working tree is in a known state before using it.
 
+### `--output-json` flag
+
+Outputs the simulation result as structured JSON instead of the default text format. This is useful for integrating gitfilm with other tools or building custom visualizations.
+
+```bash
+gitfilm --output-json 'add main.rs' 'commit -m "init"'
+```
+
+Output:
+
+```json
+{
+  "operations": [
+    { "kind": "add", "args": ["main.rs"] },
+    { "kind": "commit", "args": ["-m", "init"] }
+  ],
+  "prev": {
+    "working_tree": [{ "path": "main.rs", "status": "untracked" }],
+    "staging_area": [],
+    "repository": { "commits": [] }
+  },
+  "next": {
+    "working_tree": [{ "path": "main.rs", "status": "clean" }],
+    "staging_area": [],
+    "repository": { "commits": [{ "hash": "abc1234", "message": "init" }] }
+  }
+}
+```
+
+> **Note**: `--output-json` cannot be used with `--execute`.
+
 ### Basic example
 
 ```bash
