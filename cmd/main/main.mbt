@@ -15,7 +15,11 @@ fn run(args : Array[String]) -> Result[String, String] {
   } else {
     match @executor.simulate(parsed.operations) {
       Ok(result) =>
-        Ok(@renderer.render_from_sim_result(result, parsed.operations))
+        if parsed.output_json {
+          Ok(@renderer.render_json_from_sim_result(result, parsed.operations))
+        } else {
+          Ok(@renderer.render_from_sim_result(result, parsed.operations))
+        }
       Err(e) => Err(e)
     }
   }

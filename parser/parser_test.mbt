@@ -117,7 +117,7 @@ test "parse_args: basic usage" {
   inspect(
     @parser.parse_args(["gitfilm", "add main.rs", "commit"]),
     content=(
-      #|Ok({operations: [Add("main.rs"), Commit(None)], execute: false})
+      #|Ok({operations: [Add("main.rs"), Commit(None)], execute: false, output_json: false})
     ),
   )
 }
@@ -129,7 +129,7 @@ test "parse_args: with --execute flag" {
       "gitfilm", "add main.rs", "commit -m 'init'", "--execute",
     ]),
     content=(
-      #|Ok({operations: [Add("main.rs"), Commit(Some("init"))], execute: true})
+      #|Ok({operations: [Add("main.rs"), Commit(Some("init"))], execute: true, output_json: false})
     ),
   )
 }
@@ -202,4 +202,26 @@ test "should_show_help: --help mixed with other args" {
 ///|
 test "should_show_help: normal args without help" {
   inspect(@parser.should_show_help(["gitfilm", "add main.rs"]), content="false")
+}
+
+///|
+test "parse_args: with --output-json flag" {
+  inspect(
+    @parser.parse_args(["gitfilm", "add main.rs", "commit", "--output-json"]),
+    content=(
+      #|Ok({operations: [Add("main.rs"), Commit(None)], execute: false, output_json: true})
+    ),
+  )
+}
+
+///|
+test "parse_args: --output-json with --execute is error" {
+  inspect(
+    @parser.parse_args([
+      "gitfilm", "add main.rs", "commit -m 'init'", "--output-json", "--execute",
+    ]),
+    content=(
+      #|Err("--output-json cannot be used with --execute")
+    ),
+  )
 }

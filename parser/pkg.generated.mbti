@@ -40,6 +40,7 @@ pub impl Show for OperationDef
 pub(all) struct ParsedInput {
   operations : Array[@model.Operation]
   execute : Bool
+  output_json : Bool
 }
 pub impl Show for ParsedInput
 

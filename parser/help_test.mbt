@@ -9,8 +9,9 @@ test "format_help: generates complete help text" {
       #|  gitfilm '<op1>' '<op2>' ...
       #|
       #|Options:
-      #|  --execute   Execute git commands after simulation succeeds
-      #|  --help, -h  Show this help message
+      #|  --execute      Execute git commands after simulation succeeds
+      #|  --output-json  Output simulation result as JSON (simulation mode only)
+      #|  --help, -h     Show this help message
       #|
       #|Operations:
       #|  add <file>            Stage a file from the working tree

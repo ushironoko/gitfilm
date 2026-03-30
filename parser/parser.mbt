@@ -2,6 +2,7 @@
 pub(all) struct ParsedInput {
   operations : Array[@model.Operation]
   execute : Bool
+  output_json : Bool
 } derive(Show)
 
 ///|
@@ -109,9 +110,12 @@ pub fn parse_args(args : Array[String]) -> Result[ParsedInput, String] {
   let skip_args = args[1:]
   let op_strings : Array[String] = []
   let mut execute = false
+  let mut output_json = false
   for a in skip_args {
     if a == "--execute" {
       execute = true
+    } else if a == "--output-json" {
+      output_json = true
     } else {
       op_strings.push(a)
     }
@@ -126,6 +130,9 @@ pub fn parse_args(args : Array[String]) -> Result[ParsedInput, String] {
       Err(e) => return Err(e)
     }
   }
+  if execute && output_json {
+    return Err("--output-json cannot be used with --execute")
+  }
   if execute {
     for op in operations {
       match op {
@@ -137,5 +144,5 @@ pub fn parse_args(args : Array[String]) -> Result[ParsedInput, String] {
       }
     }
   }
-  Ok({ operations, execute })
+  Ok({ operations, execute, output_json })
 }
