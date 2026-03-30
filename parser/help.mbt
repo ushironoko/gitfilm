@@ -22,6 +22,12 @@ pub fn cli_options() -> Array[CliOption] {
       required: false,
     },
     {
+      names: ["--output-json"],
+      value_hint: None,
+      description: "Output simulation result as JSON (simulation mode only)",
+      required: false,
+    },
+    {
       names: ["--help", "-h"],
       value_hint: None,
       description: "Show this help message",

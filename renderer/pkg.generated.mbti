@@ -13,6 +13,8 @@ pub fn render_comparison(@model.GitState, @model.GitState, Array[@model.Operatio
 
 pub fn render_from_sim_result(@executor.SimResult, Array[@model.Operation]) -> String
 
+pub fn render_json_from_sim_result(@executor.SimResult, Array[@model.Operation]) -> String
+
 pub fn render_state(@model.GitState, String) -> String
 
 // Errors

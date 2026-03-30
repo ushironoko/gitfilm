@@ -303,6 +303,182 @@ fn render_log(buf : StringBuilder, label : String, log_output : String) -> Unit 
 }
 
 ///|
+fn operation_to_json(op : @model.Operation) -> Json {
+  let obj : Map[String, Json] = {}
+  match op {
+    Add(file) => {
+      obj["kind"] = Json::string("add")
+      obj["args"] = Json::array([Json::string(file)])
+    }
+    Commit(None) => {
+      obj["kind"] = Json::string("commit")
+      obj["args"] = Json::array([])
+    }
+    Commit(Some(msg)) => {
+      obj["kind"] = Json::string("commit")
+      obj["args"] = Json::array([Json::string("-m"), Json::string(msg)])
+    }
+    ResetSoft(n) => {
+      obj["kind"] = Json::string("reset")
+      obj["args"] = Json::array([
+        Json::string("--soft"),
+        Json::string("HEAD~\{n}"),
+      ])
+    }
+    ResetMixed(n) => {
+      obj["kind"] = Json::string("reset")
+      obj["args"] = Json::array([
+        Json::string("--mixed"),
+        Json::string("HEAD~\{n}"),
+      ])
+    }
+    ResetHard(n) => {
+      obj["kind"] = Json::string("reset")
+      obj["args"] = Json::array([
+        Json::string("--hard"),
+        Json::string("HEAD~\{n}"),
+      ])
+    }
+    Restore(file) => {
+      obj["kind"] = Json::string("restore")
+      obj["args"] = Json::array([Json::string(file)])
+    }
+    Checkout(file) => {
+      obj["kind"] = Json::string("checkout")
+      obj["args"] = Json::array([Json::string("--"), Json::string(file)])
+    }
+    Rm(file) => {
+      obj["kind"] = Json::string("rm")
+      obj["args"] = Json::array([Json::string(file)])
+    }
+  }
+  Json::object(obj)
+}
+
+///|
+fn build_wt_json(
+  paths : Array[String],
+  entries : Array[PorcelainEntry],
+  tracked : Map[String, Unit],
+) -> Json {
+  let items : Array[Json] = []
+  for path in paths {
+    let mut status_str = ""
+    for e in entries {
+      if e.path == path {
+        status_str = format_porcelain_wt_status(e)
+        break
+      }
+    }
+    if status_str == "" && tracked.contains(path) {
+      status_str = "clean"
+    }
+    if status_str != "" {
+      let entry : Map[String, Json] = {}
+      entry["path"] = Json::string(path)
+      entry["status"] = Json::string(status_str)
+      items.push(Json::object(entry))
+    }
+  }
+  Json::array(items)
+}
+
+///|
+fn build_sa_json(
+  paths : Array[String],
+  entries : Array[PorcelainEntry],
+) -> Json {
+  let items : Array[Json] = []
+  for path in paths {
+    for e in entries {
+      if e.path == path {
+        match format_porcelain_sa_status(e) {
+          Some(status_str) => {
+            let entry : Map[String, Json] = {}
+            entry["path"] = Json::string(path)
+            entry["status"] = Json::string(status_str)
+            items.push(Json::object(entry))
+          }
+          None => ()
+        }
+        break
+      }
+    }
+  }
+  Json::array(items)
+}
+
+///|
+fn parse_commit_line(line : String) -> Json {
+  let obj : Map[String, Json] = {}
+  let mut first_space = -1
+  for i = 0; i < line.length(); i = i + 1 {
+    if line.code_unit_at(i) == 0x20 {
+      first_space = i
+      break
+    }
+  }
+  if first_space >= 0 {
+    obj["hash"] = Json::string(line[0:first_space].to_string())
+    obj["message"] = Json::string(line[first_space + 1:].to_string())
+  } else {
+    obj["hash"] = Json::string(line)
+    obj["message"] = Json::string("")
+  }
+  Json::object(obj)
+}
+
+///|
+fn build_repo_json(log_output : String) -> Json {
+  let commits : Array[Json] = []
+  if log_output != "" {
+    let lines = log_output
+      .split("\n")
+      .map(fn(sv) { sv.to_string() })
+      .filter(fn(s) { s != "" })
+      .collect()
+    for line in lines {
+      commits.push(parse_commit_line(line))
+    }
+  }
+  let repo : Map[String, Json] = {}
+  repo["commits"] = Json::array(commits)
+  Json::object(repo)
+}
+
+///|
+pub fn render_json_from_sim_result(
+  result : @executor.SimResult,
+  ops : Array[@model.Operation],
+) -> String {
+  let touched = result.touched_paths
+  let prev_entries = parse_porcelain_status(result.prev_porcelain_status)
+  let next_entries = parse_porcelain_status(result.porcelain_status)
+  let prev_tracked : Map[String, Unit] = {}
+  for p in result.prev_tracked_paths {
+    prev_tracked[p] = ()
+  }
+  let next_tracked : Map[String, Unit] = {}
+  for p in result.tracked_paths {
+    next_tracked[p] = ()
+  }
+  let ops_json : Array[Json] = ops.map(fn(op) { operation_to_json(op) })
+  let prev : Map[String, Json] = {}
+  prev["working_tree"] = build_wt_json(touched, prev_entries, prev_tracked)
+  prev["staging_area"] = build_sa_json(touched, prev_entries)
+  prev["repository"] = build_repo_json(result.prev_log_output)
+  let next : Map[String, Json] = {}
+  next["working_tree"] = build_wt_json(touched, next_entries, next_tracked)
+  next["staging_area"] = build_sa_json(touched, next_entries)
+  next["repository"] = build_repo_json(result.log_output)
+  let root : Map[String, Json] = {}
+  root["operations"] = Json::array(ops_json)
+  root["prev"] = Json::object(prev)
+  root["next"] = Json::object(next)
+  Json::object(root).stringify()
+}
+
+///|
 pub fn render_from_sim_result(
   result : @executor.SimResult,
   ops : Array[@model.Operation],

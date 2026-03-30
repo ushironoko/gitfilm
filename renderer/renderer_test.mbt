@@ -212,3 +212,72 @@ test "parse_porcelain_status: multiple entries" {
     ),
   )
 }
+
+///|
+test "render_json: empty state" {
+  let result : @executor.SimResult = {
+    prev_porcelain_status: "",
+    prev_log_output: "",
+    porcelain_status: "",
+    diff_stat: "",
+    log_output: "",
+    touched_paths: [],
+    exec_log: "",
+    prev_tracked_paths: [],
+    tracked_paths: [],
+  }
+  let ops = [@model.Operation::Add("main.rs")]
+  inspect(
+    @renderer.render_json_from_sim_result(result, ops),
+    content=(
+      #|{"operations":[{"kind":"add","args":["main.rs"]}],"prev":{"working_tree":[],"staging_area":[],"repository":{"commits":[]}},"next":{"working_tree":[],"staging_area":[],"repository":{"commits":[]}}}
+    ),
+  )
+}
+
+///|
+test "render_json: untracked to committed" {
+  let result : @executor.SimResult = {
+    prev_porcelain_status: "?? main.rs",
+    prev_log_output: "",
+    porcelain_status: "",
+    diff_stat: "",
+    log_output: "abc1234 init",
+    touched_paths: ["main.rs"],
+    exec_log: "",
+    prev_tracked_paths: [],
+    tracked_paths: ["main.rs"],
+  }
+  let ops = [
+    @model.Operation::Add("main.rs"),
+    @model.Operation::Commit(Some("init")),
+  ]
+  inspect(
+    @renderer.render_json_from_sim_result(result, ops),
+    content=(
+      #|{"operations":[{"kind":"add","args":["main.rs"]},{"kind":"commit","args":["-m","init"]}],"prev":{"working_tree":[{"path":"main.rs","status":"untracked"}],"staging_area":[],"repository":{"commits":[]}},"next":{"working_tree":[{"path":"main.rs","status":"clean"}],"staging_area":[],"repository":{"commits":[{"hash":"abc1234","message":"init"}]}}}
+    ),
+  )
+}
+
+///|
+test "render_json: staged files" {
+  let result : @executor.SimResult = {
+    prev_porcelain_status: "?? main.rs",
+    prev_log_output: "",
+    porcelain_status: "A  main.rs",
+    diff_stat: "",
+    log_output: "",
+    touched_paths: ["main.rs"],
+    exec_log: "",
+    prev_tracked_paths: [],
+    tracked_paths: [],
+  }
+  let ops = [@model.Operation::Add("main.rs")]
+  inspect(
+    @renderer.render_json_from_sim_result(result, ops),
+    content=(
+      #|{"operations":[{"kind":"add","args":["main.rs"]}],"prev":{"working_tree":[{"path":"main.rs","status":"untracked"}],"staging_area":[],"repository":{"commits":[]}},"next":{"working_tree":[{"path":"main.rs","status":"clean"}],"staging_area":[{"path":"main.rs","status":"staged (new file)"}],"repository":{"commits":[]}}}
+    ),
+  )
+}
