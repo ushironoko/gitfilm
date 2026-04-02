@@ -168,7 +168,7 @@ jobs:
           set -euo pipefail
           test -f "$HOME/.moon/lib/libbacktrace.a" || { echo "::error::MoonBit libbacktrace.a not found"; exit 1; }
           cp "$RUNNER_TEMP/libbacktrace/.libs/libbacktrace.a" "$HOME/.moon/lib/libbacktrace.a"
-          find ./_build/native/release/build \( -name '*.o' -o -name '*.a' -o -name '*.exe' \) -print0 | xargs -0 rm -f
+          find . -path "*/native/release/*" \( -name '*.o' -o -name '*.a' -o -name '*.exe' \) -print0 | xargs -0 rm -f
 
           if [ "$CROSS_OS" = "macos" ]; then
             printf '#!/bin/sh\nexec /usr/bin/cc -arch x86_64 -mmacosx-version-min=10.15 "$@"\n' > "$RUNNER_TEMP/cross-cc"
