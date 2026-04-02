@@ -95,8 +95,20 @@ jobs:
         include:
           - target: x86_64-linux
             runner: ubuntu-latest
+            cross: false
           - target: aarch64-macos
             runner: macos-latest
+            cross: false
+          - target: x86_64-macos
+            runner: macos-latest
+            cross: true
+            cross_arch: x86_64
+            cross_os: macos
+          - target: aarch64-linux
+            runner: ubuntu-latest
+            cross: true
+            cross_arch: aarch64
+            cross_os: linux
     runs-on: ${{ matrix.runner }}
     env:
       ARCHIVE_NAME: gitfilm-${{ inputs.version }}-${{ matrix.target }}
@@ -113,15 +125,109 @@ jobs:
       - name: Install dependencies
         run: moon update
 
-      - name: Build native release binary
+      - name: Install cross-compilation tools
+        if: matrix.cross && matrix.cross_os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build host binary to generate C intermediates
+        if: matrix.cross
         run: moon build --target native --release
+
+      - name: Build libbacktrace for target architecture
+        if: matrix.cross
+        env:
+          CROSS_ARCH: ${{ matrix.cross_arch }}
+          CROSS_OS: ${{ matrix.cross_os }}
+        run: |
+          set -euo pipefail
+          git clone https://github.com/ianlancetaylor/libbacktrace.git "$RUNNER_TEMP/libbacktrace"
+          cd "$RUNNER_TEMP/libbacktrace"
+          git checkout b9e40069c0b47a722286b94eb5231f7f05c08713
+
+          if [ "$CROSS_OS" = "macos" ]; then
+            MACOSX_DEPLOYMENT_TARGET=10.15 CC="clang -arch ${CROSS_ARCH}" ./configure \
+              --host="${CROSS_ARCH}-apple-darwin" \
+              --disable-shared --enable-static
+            make -j"$(sysctl -n hw.ncpu)"
+          else
+            CC=aarch64-linux-gnu-gcc ./configure \
+              --host=aarch64-linux-gnu \
+              --disable-shared --enable-static
+            make -j"$(nproc)"
+          fi
+
+          test -f .libs/libbacktrace.a || { echo "::error::libbacktrace.a was not produced"; exit 1; }
+
+      - name: Prepare cross-compilation environment
+        if: matrix.cross
+        env:
+          CROSS_OS: ${{ matrix.cross_os }}
+        run: |
+          set -euo pipefail
+          test -f "$HOME/.moon/lib/libbacktrace.a" || { echo "::error::MoonBit libbacktrace.a not found"; exit 1; }
+          cp "$RUNNER_TEMP/libbacktrace/.libs/libbacktrace.a" "$HOME/.moon/lib/libbacktrace.a"
+          find . -path "*/native/release/*" \( -name '*.o' -o -name '*.a' -o -name '*.exe' \) -print0 | xargs -0 rm -f
+
+          if [ "$CROSS_OS" = "macos" ]; then
+            printf '#!/bin/sh\nexec /usr/bin/cc -arch x86_64 -mmacosx-version-min=10.15 "$@"\n' > "$RUNNER_TEMP/cross-cc"
+            printf '#!/bin/sh\nexec /usr/bin/ar "$@"\n' > "$RUNNER_TEMP/cross-ar"
+          else
+            printf '#!/bin/sh\nexec aarch64-linux-gnu-gcc "$@"\n' > "$RUNNER_TEMP/cross-cc"
+            printf '#!/bin/sh\nexec aarch64-linux-gnu-ar "$@"\n' > "$RUNNER_TEMP/cross-ar"
+          fi
+          chmod +x "$RUNNER_TEMP/cross-cc" "$RUNNER_TEMP/cross-ar"
+
+      - name: Build native release binary
+        if: ${{ !matrix.cross }}
+        run: moon build --target native --release
+
+      - name: Build cross-compiled release binary
+        if: matrix.cross
+        run: CC="$RUNNER_TEMP/cross-cc" AR="$RUNNER_TEMP/cross-ar" MOON_CC="$RUNNER_TEMP/cross-cc" MOON_AR="$RUNNER_TEMP/cross-ar" moon build --target native --release
+
+      - name: Verify binary architecture
+        if: matrix.cross
+        env:
+          CROSS_OS: ${{ matrix.cross_os }}
+        run: |
+          set -euo pipefail
+          BINARY_PATH=$(find . -name "main.exe" -path "*/native/release/*" -type f | head -1)
+          if [ -z "$BINARY_PATH" ]; then
+            echo "::error::Binary not found under native/release build tree"
+            exit 1
+          fi
+          echo "Binary: $BINARY_PATH"
+          file "$BINARY_PATH"
+
+          STUB_OBJ=$(find . -name "process_native.o" -path "*/native/release/*" -type f | head -1)
+          if [ -n "$STUB_OBJ" ]; then
+            echo "Stub object: $STUB_OBJ"
+            file "$STUB_OBJ"
+          fi
+
+          if [ "$CROSS_OS" = "macos" ]; then
+            file "$BINARY_PATH" | grep -q "x86_64" || { echo "::error::Binary is not x86_64"; exit 1; }
+            if [ -n "$STUB_OBJ" ]; then
+              file "$STUB_OBJ" | grep -q "x86_64" || { echo "::error::Stub object is not x86_64"; exit 1; }
+            fi
+            arch -x86_64 "$BINARY_PATH" --help || { echo "::error::x86_64 binary failed smoke test"; exit 1; }
+          else
+            file "$BINARY_PATH" | grep -q "aarch64\|ARM aarch64" || { echo "::error::Binary is not aarch64"; exit 1; }
+            if [ -n "$STUB_OBJ" ]; then
+              file "$STUB_OBJ" | grep -q "aarch64\|ARM aarch64" || { echo "::error::Stub object is not aarch64"; exit 1; }
+            fi
+            readelf -h "$BINARY_PATH" | grep -q "AArch64" || { echo "::error::ELF header is not AArch64"; exit 1; }
+            readelf -d "$BINARY_PATH" 2>/dev/null && echo "Dynamic dependencies listed above" || echo "Statically linked"
+          fi
 
       - name: Create archive
         run: |
-          BINARY_PATH=$(find . -name "main.exe" -path "*/release/*" -type f | head -1)
+          set -euo pipefail
+          BINARY_PATH=$(find . -name "main.exe" -path "*/native/release/*" -type f | head -1)
           if [ -z "$BINARY_PATH" ]; then
-            echo "::error::Binary not found"
-            ls -la
+            echo "::error::Binary not found under native/release build tree"
             exit 1
           fi
           echo "Found binary at: $BINARY_PATH"
