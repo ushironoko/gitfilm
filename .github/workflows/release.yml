@@ -185,7 +185,7 @@ jobs:
 
       - name: Build cross-compiled release binary
         if: matrix.cross
-        run: MOON_CC="$RUNNER_TEMP/cross-cc" moon build --target native --release
+        run: CC="$RUNNER_TEMP/cross-cc" AR="$RUNNER_TEMP/cross-ar" MOON_CC="$RUNNER_TEMP/cross-cc" MOON_AR="$RUNNER_TEMP/cross-ar" moon build --target native --release
 
       - name: Verify binary architecture
         if: matrix.cross
@@ -193,16 +193,31 @@ jobs:
           CROSS_OS: ${{ matrix.cross_os }}
         run: |
           set -euo pipefail
-          BINARY_PATH="./_build/native/release/build/cmd/main/main.exe"
-          test -f "$BINARY_PATH" || { echo "::error::Binary not found at $BINARY_PATH"; exit 1; }
+          BINARY_PATH=$(find . -name "main.exe" -path "*/native/release/*" -type f | head -1)
+          if [ -z "$BINARY_PATH" ]; then
+            echo "::error::Binary not found under native/release build tree"
+            exit 1
+          fi
           echo "Binary: $BINARY_PATH"
           file "$BINARY_PATH"
 
+          STUB_OBJ=$(find . -name "process_native.o" -path "*/native/release/*" -type f | head -1)
+          if [ -n "$STUB_OBJ" ]; then
+            echo "Stub object: $STUB_OBJ"
+            file "$STUB_OBJ"
+          fi
+
           if [ "$CROSS_OS" = "macos" ]; then
             file "$BINARY_PATH" | grep -q "x86_64" || { echo "::error::Binary is not x86_64"; exit 1; }
+            if [ -n "$STUB_OBJ" ]; then
+              file "$STUB_OBJ" | grep -q "x86_64" || { echo "::error::Stub object is not x86_64"; exit 1; }
+            fi
             arch -x86_64 "$BINARY_PATH" --help || { echo "::error::x86_64 binary failed smoke test"; exit 1; }
           else
             file "$BINARY_PATH" | grep -q "aarch64\|ARM aarch64" || { echo "::error::Binary is not aarch64"; exit 1; }
+            if [ -n "$STUB_OBJ" ]; then
+              file "$STUB_OBJ" | grep -q "aarch64\|ARM aarch64" || { echo "::error::Stub object is not aarch64"; exit 1; }
+            fi
             readelf -h "$BINARY_PATH" | grep -q "AArch64" || { echo "::error::ELF header is not AArch64"; exit 1; }
             readelf -d "$BINARY_PATH" 2>/dev/null && echo "Dynamic dependencies listed above" || echo "Statically linked"
           fi
@@ -210,8 +225,11 @@ jobs:
       - name: Create archive
         run: |
           set -euo pipefail
-          BINARY_PATH="./_build/native/release/build/cmd/main/main.exe"
-          test -f "$BINARY_PATH" || { echo "::error::Binary not found at $BINARY_PATH"; exit 1; }
+          BINARY_PATH=$(find . -name "main.exe" -path "*/native/release/*" -type f | head -1)
+          if [ -z "$BINARY_PATH" ]; then
+            echo "::error::Binary not found under native/release build tree"
+            exit 1
+          fi
           echo "Found binary at: $BINARY_PATH"
           mkdir -p "${ARCHIVE_NAME}"
           cp "$BINARY_PATH" "${ARCHIVE_NAME}/${BINARY_NAME}"
