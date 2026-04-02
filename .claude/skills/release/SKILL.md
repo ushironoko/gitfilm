@@ -108,7 +108,7 @@ gitfilmのリリース手順を実行するスキル。
 |--------|------|
 | validate | semver検証、bump_sha == origin/main HEAD検証、moon.mod.jsonバージョン一致確認、タグ重複チェック |
 | test | `moon test` |
-| build | 2プラットフォーム向けネイティブビルド（x86_64-linux, aarch64-macos） |
+| build | 4プラットフォーム向けビルド（x86_64-linux, aarch64-macos はネイティブ、x86_64-macos, aarch64-linux はクロスコンパイル） |
 | release | タグ作成・プッシュ、アーティファクトダウンロード、GitHub Release作成 |
 | rollback | test/build/release失敗時に自動実行（コミットrevert、タグ・リリース削除） |
 
